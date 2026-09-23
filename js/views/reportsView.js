@@ -24,9 +24,7 @@ export async function renderReports(container) {
   try {
     const [summaryRes, historyRes] = await Promise.all([
       api.getReportsSummary(session.id),
-      fetch(`/api/letters/${session.id}/history`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('sessional_token') || ''}` }
-      }).then((r) => r.json()).catch(() => ({ data: [] }))
+      api.getLetterHistory(session.id).catch(() => ({ data: [] }))
     ]);
 
     const stats = summaryRes.data?.stats || {};

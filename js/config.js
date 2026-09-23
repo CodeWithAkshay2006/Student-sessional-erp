@@ -12,7 +12,7 @@ export const config = {
     return (
       window.ENV?.SUPABASE_URL ||
       localStorage.getItem('sessional_erp_supabase_url') ||
-      'https://your-project-id.supabase.co'
+      'https://wrsxyfenrjlccrpabhje.supabase.co'
     );
   },
 
@@ -23,15 +23,8 @@ export const config = {
     return (
       window.ENV?.SUPABASE_ANON_KEY ||
       localStorage.getItem('sessional_erp_supabase_anon_key') ||
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-anon-key'
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc3h5ZmVucmpsY2NycGFiaGplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNzI1MzUsImV4cCI6MjEwNTc0ODUzNX0.WfjJDDzYDTICbyJl2OfNbcxVQBalxMgy8U3P4MsicHw'
     );
-  },
-
-  /**
-   * Get the active API Base URL
-   */
-  getApiBaseUrl() {
-    return window.ENV?.API_BASE_URL || '/api';
   },
 
   /**
@@ -49,21 +42,9 @@ export const config = {
   },
 
   /**
-   * Optionally sync fresh environment configuration from backend /api/config
+   * No-op for static host
    */
   async syncFromApi() {
-    try {
-      const res = await fetch('/api/config');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.supabaseUrl && data.supabaseAnonKey) {
-          window.ENV = window.ENV || {};
-          window.ENV.SUPABASE_URL = data.supabaseUrl;
-          window.ENV.SUPABASE_ANON_KEY = data.supabaseAnonKey;
-        }
-      }
-    } catch (err) {
-      // Offline or static host fallback
-    }
+    // Directly configured via window.ENV and fallbacks
   }
 };
