@@ -223,8 +223,8 @@ export async function renderResultAnalysis(container) {
               </thead>
               <tbody class="divide-y divide-slate-100" id="analysisTableBody">
                 ${students.map((s) => {
-                  const m = s.markEntry || {};
-                  const c = s.computedResult || {};
+                  const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+                  const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
                   const tier = c.classification || 'AVERAGE';
                   const tierClass = tier === 'FAST' ? 'badge-fast' : tier === 'SLOW' ? 'badge-slow' : 'badge-average';
 

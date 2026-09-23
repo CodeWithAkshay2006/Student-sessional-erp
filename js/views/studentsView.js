@@ -105,7 +105,7 @@ export async function renderStudents(container) {
                     <td colspan="7" class="py-8 text-center text-slate-400 font-medium">No students enrolled in this session yet. Click "Add Student" or "Batch Upload" to import.</td>
                   </tr>
                 ` : students.map((s, idx) => {
-                  const m = s.markEntry;
+                  const m = Array.isArray(s.markEntry) ? (s.markEntry[0] || {}) : (s.markEntry || {});
                   const hasMarks = m && (m.t1 || m.t2 || m.quizAvg);
                   return `
                     <tr class="hover:bg-slate-50/80 transition-colors student-row" data-id="${s.id}" data-roll="${s.rollNo.toLowerCase()}" data-name="${s.name.toLowerCase()}">

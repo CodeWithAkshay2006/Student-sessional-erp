@@ -90,8 +90,8 @@ export async function renderMarksEntry(container) {
               </thead>
               <tbody class="divide-y divide-slate-100" id="gradebookBody">
                 ${students.map((s, idx) => {
-                  const m = s.markEntry || {};
-                  const c = s.computedResult || {};
+                  const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+                  const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
                   const tierClass = c.classification === 'FAST' ? 'badge-fast' : c.classification === 'SLOW' ? 'badge-slow' : 'badge-average';
                   return `
                     <tr class="hover:bg-slate-50/70 transition-colors gradebook-row" data-student-id="${s.id}">

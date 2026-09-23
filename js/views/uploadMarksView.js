@@ -157,6 +157,35 @@ export async function renderUploadMarks(container) {
         </div>
       </div>
 
+      <!-- Ingested Data Preview Table -->
+      <div id="previewSection" class="hidden bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col gap-3">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[20px]">table_chart</span>
+            <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Ingested Student Marks Preview</h3>
+          </div>
+          <span id="previewCountBadge" class="text-xs font-bold text-primary bg-slate-100 px-2.5 py-1 rounded">0 Rows</span>
+        </div>
+        <div class="overflow-x-auto max-h-96">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="sticky top-0 bg-slate-100 text-slate-700 uppercase font-bold shadow-xs">
+              <tr>
+                <th class="py-2.5 px-3">#</th>
+                <th class="py-2.5 px-3">Roll No</th>
+                <th class="py-2.5 px-3">Student Name</th>
+                <th class="py-2.5 px-3 text-center">T1 (${session.maxT1 || 20})</th>
+                <th class="py-2.5 px-3 text-center">T2 (${session.maxT2 || 20})</th>
+                <th class="py-2.5 px-3 text-center">Quiz (${session.maxQuiz || 20})</th>
+                <th class="py-2.5 px-3 text-center">IE (${session.maxIE !== undefined && session.maxIE !== null ? session.maxIE : 5})</th>
+                <th class="py-2.5 px-3 text-center">TA (${session.maxTA !== undefined && session.maxTA !== null ? session.maxTA : 10})</th>
+                <th class="py-2.5 px-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody id="previewTableBody" class="divide-y divide-slate-100 font-medium"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Diagnostic Error Table -->
       <div id="diagnosticSection" class="hidden bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex flex-col gap-3">
         <div class="flex items-center justify-between">
@@ -225,6 +254,35 @@ export async function renderUploadMarks(container) {
         document.getElementById('commitSuccessBanner').classList.remove('hidden');
         commitBtn.disabled = true;
         commitBtn.classList.add('bg-slate-300', 'cursor-not-allowed');
+      }
+
+      // Render Preview Table
+      const previewSection = document.getElementById('previewSection');
+      const previewTableBody = document.getElementById('previewTableBody');
+      const previewCountBadge = document.getElementById('previewCountBadge');
+
+      if (data.preview && data.preview.length > 0) {
+        previewSection.classList.remove('hidden');
+        previewCountBadge.textContent = `${data.preview.length} Rows Ingested`;
+        previewTableBody.innerHTML = data.preview.map((row, idx) => `
+          <tr class="hover:bg-slate-50 transition-colors ${row.hasError ? 'bg-rose-50/50' : ''}">
+            <td class="py-2 px-3 text-slate-400 font-mono">${idx + 1}</td>
+            <td class="py-2 px-3 font-mono font-bold text-slate-900">${row.rollNo}</td>
+            <td class="py-2 px-3 font-semibold text-slate-800">${row.name}</td>
+            <td class="py-2 px-3 text-center ${row.t1 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t1 !== null && row.t1 !== undefined ? row.t1 : '-'}</td>
+            <td class="py-2 px-3 text-center ${row.t2 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t2 !== null && row.t2 !== undefined ? row.t2 : '-'}</td>
+            <td class="py-2 px-3 text-center ${row.quizAvg === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.quizAvg !== null && row.quizAvg !== undefined ? row.quizAvg : '-'}</td>
+            <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.ieScore !== null && row.ieScore !== undefined ? row.ieScore : '-'}</td>
+            <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.taScore !== null && row.taScore !== undefined ? row.taScore : '-'}</td>
+            <td class="py-2 px-3 text-center">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${row.hasError ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
+                ${row.hasError ? 'Issue' : 'Valid'}
+              </span>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        previewSection.classList.add('hidden');
       }
 
       // Render Diagnostic Errors

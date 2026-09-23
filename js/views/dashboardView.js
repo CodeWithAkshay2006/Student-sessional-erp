@@ -273,8 +273,8 @@ export async function renderDashboard(container) {
               </thead>
               <tbody class="divide-y divide-slate-100">
                 ${students.slice(0, 5).map((s) => {
-                  const m = s.markEntry || {};
-                  const c = s.computedResult || {};
+                  const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+                  const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
                   const tierClass = c.classification === 'FAST' ? 'badge-fast' : c.classification === 'SLOW' ? 'badge-slow' : 'badge-average';
                   return `
                     <tr class="hover:bg-slate-50/80 transition-colors">

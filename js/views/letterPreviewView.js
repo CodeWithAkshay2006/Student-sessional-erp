@@ -169,7 +169,7 @@ export async function renderLetterPreview(container, initialTrack = 'FAST') {
                           <td colspan="6" class="py-4 text-center text-slate-400 text-xs italic">No students classified in this category for the current session.</td>
                         </tr>
                       ` : students.map((s, idx) => {
-                        const comp = s.computedResult || {};
+                        const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
                         const isEven = idx % 2 === 1;
                         return `
                           <tr class="${isEven ? 'bg-slate-50/50' : 'bg-white'} hover:bg-amber-50/40 transition-colors">

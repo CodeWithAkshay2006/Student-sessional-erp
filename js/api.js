@@ -173,7 +173,15 @@ export const api = {
 
   // Students
   getStudents: async (sessionId) => {
-    return supabaseRequest(`Student?sessionId=eq.${sessionId}&select=*,markEntry:MarkEntry(*),computedResult:ComputedResult(*)&order=rollNo.asc`);
+    const res = await supabaseRequest(`Student?sessionId=eq.${sessionId}&select=*,markEntry:MarkEntry(*),computedResult:ComputedResult(*)&order=rollNo.asc`);
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map((s) => ({
+        ...s,
+        markEntry: Array.isArray(s.markEntry) ? (s.markEntry[0] || null) : (s.markEntry || null),
+        computedResult: Array.isArray(s.computedResult) ? (s.computedResult[0] || null) : (s.computedResult || null)
+      }));
+    }
+    return res;
   },
   addStudent: async (sessionId, data) => {
     const studentId = data.id || crypto.randomUUID();
@@ -214,7 +222,14 @@ export const api = {
 
   // Marks
   getMarks: async (sessionId) => {
-    return supabaseRequest(`MarkEntry?sessionId=eq.${sessionId}&select=*,student:Student(*)&order=student(rollNo).asc`);
+    const res = await supabaseRequest(`MarkEntry?sessionId=eq.${sessionId}&select=*,student:Student(*)&order=student(rollNo).asc`);
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map((m) => ({
+        ...m,
+        student: Array.isArray(m.student) ? (m.student[0] || null) : (m.student || null)
+      }));
+    }
+    return res;
   },
   saveBatchMarks: async (sessionId, updates) => {
     for (const update of updates) {
@@ -244,7 +259,14 @@ export const api = {
       query += `&classification=eq.${params.classification}`;
     }
     query += '&order=student(rollNo).asc';
-    return supabaseRequest(query);
+    const res = await supabaseRequest(query);
+    if (res.data && Array.isArray(res.data)) {
+      res.data = res.data.map((r) => ({
+        ...r,
+        student: Array.isArray(r.student) ? (r.student[0] || null) : (r.student || null)
+      }));
+    }
+    return res;
   },
   getStats: async (sessionId) => {
     const res = await api.getResults(sessionId);
@@ -287,7 +309,7 @@ export const api = {
         }
       );
 
-      await supabaseRequest(`ComputedResult?studentId=eq.${studentId}`, {
+      const patchRes = await supabaseRequest(`ComputedResult?studentId=eq.${studentId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           bestScore,
@@ -297,6 +319,22 @@ export const api = {
           isAbsent
         })
       });
+
+      if (!patchRes.data || patchRes.data.length === 0) {
+        await supabaseRequest('ComputedResult', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            studentId,
+            sessionId,
+            bestScore,
+            bestPct,
+            classification,
+            sessionalTotal,
+            isAbsent
+          })
+        }).catch(() => {});
+      }
     }
 
     return { data: { success: true } };
@@ -421,81 +459,261 @@ export const api = {
 
   // Marks upload
   uploadMarksFile: async (sessionId, formData, commit = false) => {
-    // If commit is false, return preview; if true, process entries
     const file = formData.get('file');
-    if (!file) throw new Error('No file provided');
+    if (!file) throw new Error('No spreadsheet file provided');
 
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length < 2) throw new Error('File must contain at least a header and one data row');
+    // 1. Fetch active session parameters for boundary auditing
+    const sessRes = await api.getSession(sessionId);
+    const session = sessRes.data || {};
+    const maxT1 = Number(session.maxT1) || 20;
+    const maxT2 = Number(session.maxT2) || 20;
+    const maxQuiz = Number(session.maxQuiz) || 20;
+    const maxIE = Number(session.maxIE !== undefined && session.maxIE !== null ? session.maxIE : 5);
+    const maxTA = Number(session.maxTA !== undefined && session.maxTA !== null ? session.maxTA : 10);
 
-    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
-    const rollIdx = headers.findIndex((h) => h.includes('roll'));
-    const nameIdx = headers.findIndex((h) => h.includes('name'));
-    const t1Idx = headers.findIndex((h) => h === 't1' || h.includes('test1'));
-    const t2Idx = headers.findIndex((h) => h === 't2' || h.includes('test2'));
-    const quizIdx = headers.findIndex((h) => h.includes('quiz'));
-    const ieIdx = headers.findIndex((h) => h.includes('ie') || h.includes('enhancement'));
-    const taIdx = headers.findIndex((h) => h.includes('ta') || h.includes('teacher'));
+    // 2. Extract 2D matrix of rows from XLSX / XLS / CSV
+    let rawMatrix = [];
+    const fileName = (file.name || '').toLowerCase();
 
+    if (typeof window !== 'undefined' && window.XLSX && (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.ods'))) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const workbook = window.XLSX.read(new Uint8Array(buffer), { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        rawMatrix = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
+      } catch (xlsxErr) {
+        console.warn('XLSX parsing failed, falling back to text CSV parser:', xlsxErr);
+      }
+    }
+
+    if (!rawMatrix || rawMatrix.length === 0) {
+      // Standard robust CSV tokenizer
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      for (const line of lines) {
+        const row = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            row.push(current.trim().replace(/^"|"$/g, ''));
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        row.push(current.trim().replace(/^"|"$/g, ''));
+        if (row.some((cell) => cell !== '')) {
+          rawMatrix.push(row);
+        }
+      }
+    }
+
+    if (!rawMatrix || rawMatrix.length < 2) {
+      throw new Error('Spreadsheet must contain at least a header row and one student data row.');
+    }
+
+    // 3. Flexible Header Normalization & Identification
+    const rawHeaders = rawMatrix[0].map((h) => String(h || '').trim());
+    const normHeaders = rawHeaders.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+    const findCol = (patterns) => {
+      return normHeaders.findIndex((h) =>
+        patterns.some((p) => (typeof p === 'string' ? h === p || h.includes(p) : p.test(h)))
+      );
+    };
+
+    const rollIdx = findCol(['roll', 'enroll', 'urn', 'reg', 'id']);
+    const nameIdx = findCol(['name', 'student']);
+    const t1Idx = findCol(['t1', 'test1', 'ct1', 'st1', 'sessional1', 'exam1', 'internal1']);
+    const t2Idx = findCol(['t2', 'test2', 'ct2', 'st2', 'sessional2', 'exam2', 'internal2']);
+    const quizIdx = findCol(['quiz', 'assign', 't3', 'test3']);
+    const ieIdx = findCol(['ie', 'enhanc', 'rubric', 'lab']);
+    const taIdx = findCol(['ta', 'teacher', 'attend', 'conduct']);
+
+    if (rollIdx === -1) {
+      throw new Error(`Could not find a Roll Number column. Available columns in spreadsheet: "${rawHeaders.join('", "')}". Please include a column named "Roll_Number" or "Roll".`);
+    }
+
+    // 4. Row Parsing, Mark Normalization & Boundary Diagnostics
     const parsedRows = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-      if (cols.length < 2) continue;
+    const errors = [];
+
+    const sanitizeMark = (val) => {
+      if (val === undefined || val === null) return null;
+      const str = String(val).trim();
+      if (str === '') return null;
+      if (/^a(b)?(sent)?$/i.test(str)) return 'A';
+      const num = Number(str);
+      return Number.isFinite(num) ? num : str;
+    };
+
+    for (let i = 1; i < rawMatrix.length; i++) {
+      const cols = rawMatrix[i];
+      if (!cols || cols.every((c) => String(c || '').trim() === '')) continue;
+
+      const rollNo = String(cols[rollIdx] || '').trim();
+      if (!rollNo) {
+        errors.push({
+          row: i + 1,
+          rollNo: 'MISSING',
+          column: rawHeaders[rollIdx] || 'Roll No',
+          message: 'Student Roll Number is required for enrollment mapping.'
+        });
+        continue;
+      }
+
+      const name = nameIdx !== -1 && cols[nameIdx] ? String(cols[nameIdx]).trim() : `Student ${i}`;
+      const t1 = t1Idx !== -1 ? sanitizeMark(cols[t1Idx]) : null;
+      const t2 = t2Idx !== -1 ? sanitizeMark(cols[t2Idx]) : null;
+      const quizAvg = quizIdx !== -1 ? sanitizeMark(cols[quizIdx]) : null;
+      const ieScore = ieIdx !== -1 ? sanitizeMark(cols[ieIdx]) : null;
+      const taScore = taIdx !== -1 ? sanitizeMark(cols[taIdx]) : null;
+
+      let hasRowError = false;
+
+      const checkLimit = (val, max, colName) => {
+        if (typeof val === 'number') {
+          if (val < 0) {
+            errors.push({ row: i + 1, rollNo, column: colName, message: `Negative mark (${val}) is not permitted.` });
+            hasRowError = true;
+          } else if (val > max) {
+            errors.push({ row: i + 1, rollNo, column: colName, message: `Score (${val}) exceeds maximum limit (${max}).` });
+            hasRowError = true;
+          }
+        }
+      };
+
+      checkLimit(t1, maxT1, 'T1 Marks');
+      checkLimit(t2, maxT2, 'T2 Marks');
+      checkLimit(quizAvg, maxQuiz, 'Quiz Marks');
+      checkLimit(ieScore, maxIE, 'IE Marks');
+      checkLimit(taScore, maxTA, 'TA Marks');
+
       parsedRows.push({
-        rollNo: cols[rollIdx] || `ROLL-${i}`,
-        name: cols[nameIdx] || `Student ${i}`,
-        t1: t1Idx !== -1 ? cols[t1Idx] : null,
-        t2: t2Idx !== -1 ? cols[t2Idx] : null,
-        quizAvg: quizIdx !== -1 ? cols[quizIdx] : null,
-        ieScore: ieIdx !== -1 ? cols[ieIdx] : null,
-        taScore: taIdx !== -1 ? cols[taIdx] : null
+        rowNumber: i + 1,
+        rollNo,
+        name,
+        t1,
+        t2,
+        quizAvg,
+        ieScore,
+        taScore,
+        hasError: hasRowError
       });
     }
 
     const audit = {
-      totalScanned: parsedRows.length,
-      validCount: parsedRows.length,
-      errorCount: 0,
-      errors: []
+      totalScanned: parsedRows.length + errors.filter((e) => e.rollNo === 'MISSING').length,
+      validCount: parsedRows.filter((r) => !r.hasError).length,
+      errorCount: errors.length,
+      errors
     };
 
+    // 5. Database Commit Phase (Only when commit === true)
     if (commit) {
-      // Commit parsed rows into Supabase
       for (const row of parsedRows) {
+        if (row.hasError) continue;
+
         // Find or create student
         const existingStudentRes = await supabaseRequest(`Student?sessionId=eq.${sessionId}&rollNo=eq.${encodeURIComponent(row.rollNo)}&select=*`);
         let student = existingStudentRes.data?.[0];
+
         if (!student) {
           const createRes = await supabaseRequest('Student', {
             method: 'POST',
-            body: JSON.stringify({ sessionId, rollNo: row.rollNo, name: row.name })
+            body: JSON.stringify({
+              id: crypto.randomUUID(),
+              sessionId,
+              rollNo: row.rollNo,
+              name: row.name
+            })
           });
           student = createRes.data?.[0];
+        } else if (row.name && row.name !== student.name) {
+          await supabaseRequest(`Student?id=eq.${student.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name: row.name })
+          });
         }
 
-        if (student) {
-          // Upsert MarkEntry
-          await supabaseRequest(`MarkEntry?studentId=eq.${student.id}`, {
+        if (!student) continue;
+
+        // Upsert MarkEntry
+        const existingMarkRes = await supabaseRequest(`MarkEntry?studentId=eq.${student.id}&select=*`);
+        const existingMark = existingMarkRes.data?.[0];
+
+        const markPayload = {
+          t1: row.t1 !== null && row.t1 !== undefined ? String(row.t1) : null,
+          t2: row.t2 !== null && row.t2 !== undefined ? String(row.t2) : null,
+          quizAvg: row.quizAvg !== null && row.quizAvg !== undefined ? String(row.quizAvg) : null,
+          ieScore: row.ieScore !== null && row.ieScore !== undefined ? String(row.ieScore) : null,
+          taScore: row.taScore !== null && row.taScore !== undefined ? String(row.taScore) : null
+        };
+
+        if (existingMark) {
+          await supabaseRequest(`MarkEntry?id=eq.${existingMark.id}`, {
             method: 'PATCH',
+            body: JSON.stringify(markPayload)
+          });
+        } else {
+          await supabaseRequest('MarkEntry', {
+            method: 'POST',
             body: JSON.stringify({
-              t1: row.t1,
-              t2: row.t2,
-              quizAvg: row.quizAvg,
-              ieScore: row.ieScore,
-              taScore: row.taScore
+              id: crypto.randomUUID(),
+              studentId: student.id,
+              sessionId,
+              ...markPayload
+            })
+          });
+        }
+
+        // Ensure ComputedResult exists
+        const existingCompRes = await supabaseRequest(`ComputedResult?studentId=eq.${student.id}&select=*`);
+        if (!existingCompRes.data?.[0]) {
+          await supabaseRequest('ComputedResult', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: crypto.randomUUID(),
+              studentId: student.id,
+              sessionId,
+              classification: 'SLOW',
+              bestScore: 0,
+              bestPct: 0,
+              sessionalTotal: 0
             })
           });
         }
       }
 
+      // Recompute all cohort statistics and learner classifications
       await api.recomputeResults(sessionId);
-      return { data: { committed: true, count: parsedRows.length, audit } };
+
+      return {
+        data: {
+          committed: true,
+          count: parsedRows.length,
+          preview: parsedRows,
+          totalRows: parsedRows.length,
+          audit
+        }
+      };
     }
 
+    // Preview Return
     return {
       data: {
-        preview: parsedRows.slice(0, 10),
+        committed: false,
+        preview: parsedRows,
         totalRows: parsedRows.length,
         audit
       }
