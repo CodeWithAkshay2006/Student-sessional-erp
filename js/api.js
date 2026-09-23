@@ -14,6 +14,8 @@ import {
   computeSessionalTotal,
   parseMark
 } from './calculations.js';
+import { downloadSessionalWorkbook } from './services/excelExport.js';
+import { generateCircularDocx } from './services/letterGenerator.js';
 
 /**
  * Universal fetch wrapper for Supabase REST API
@@ -428,18 +430,33 @@ export const api = {
   },
 
   downloadLetterDocx: async (sessionId, type = 'FAST') => {
-    const preview = await api.getLetterPreview(sessionId, type);
-    const text = preview.data.letterText;
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const fileName = `Official_Letter_${type}_${sessionId.slice(0, 8)}.txt`;
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(downloadUrl);
+    const [sessRes, resultsRes, resourcesRes] = await Promise.all([
+      api.getSession(sessionId),
+      api.getResults(sessionId, { classification: type }),
+      api.getSessionResources(sessionId).catch(() => ({ data: [] }))
+    ]);
+
+    const session = sessRes.data || {};
+    const students = resultsRes.data || [];
+    const resources = (resourcesRes.data || []).filter((r) => r.category === type);
+
+    const safeCode = (session.subject?.code || 'SESSION').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeSec = (session.section || 'A').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `Official_Circular_${type === 'FAST' ? 'FastLearners' : 'SlowLearners'}_${safeCode}_Sec${safeSec}.docx`;
+
+    // Record in GeneratedLetter audit log
+    supabaseRequest('GeneratedLetter', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: crypto.randomUUID(),
+        sessionId,
+        type,
+        fileName,
+        studentCount: students.length
+      })
+    }).catch(() => {});
+
+    await generateCircularDocx(session, type, students, resources);
   },
 
   getLetterHistory: async (sessionId) => {
@@ -456,59 +473,7 @@ export const api = {
     const session = sessRes.data || {};
     const students = studentsRes.data || [];
 
-    // Construct spreadsheet rows
-    const rows = [
-      ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
-      [`Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`, `AY: ${session.academicYear || ''}`, `Sem: ${session.semester || ''}`, `Sec: ${session.section || ''}`],
-      [''],
-      ['S.No', 'Roll Number', 'Student Name', `T1 (${session.maxT1 || 20})`, `T2 (${session.maxT2 || 20})`, `Quiz (${session.maxQuiz || 20})`, `Best Score (${session.maxT1 || 20})`, 'Best %', `IE (${session.maxIE !== undefined && session.maxIE !== null ? session.maxIE : 5})`, `TA (${session.maxTA !== undefined && session.maxTA !== null ? session.maxTA : 10})`, 'Sessional (30)', 'Classification']
-    ];
-
-    for (let i = 0; i < students.length; i++) {
-      const s = students[i];
-      const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
-      const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-
-      rows.push([
-        i + 1,
-        s.rollNo || s.student?.rollNo || '-',
-        s.name || s.student?.name || '-',
-        m.t1 !== null && m.t1 !== undefined ? m.t1 : 'A',
-        m.t2 !== null && m.t2 !== undefined ? m.t2 : 'A',
-        m.quizAvg !== null && m.quizAvg !== undefined ? m.quizAvg : 'A',
-        c.bestScore !== null && c.bestScore !== undefined ? c.bestScore : 0,
-        c.bestPct !== null && c.bestPct !== undefined ? `${c.bestPct}%` : '0%',
-        m.ieScore !== null && m.ieScore !== undefined ? m.ieScore : 0,
-        m.taScore !== null && m.taScore !== undefined ? m.taScore : 0,
-        c.sessionalTotal !== null && c.sessionalTotal !== undefined ? c.sessionalTotal : 0,
-        c.classification || 'AVERAGE'
-      ]);
-    }
-
-    const fileName = `Sessional_Report_${session.subject?.code || 'SESSION'}_Sec${session.section || 'A'}`;
-
-    if (typeof window !== 'undefined' && window.XLSX) {
-      try {
-        const ws = window.XLSX.utils.aoa_to_sheet(rows);
-        const wb = window.XLSX.utils.book_new();
-        window.XLSX.utils.book_append_sheet(wb, ws, 'Result Analysis');
-        window.XLSX.writeFile(wb, `${fileName}.xlsx`);
-        return;
-      } catch (err) {
-        console.warn('XLSX export failed, falling back to CSV:', err);
-      }
-    }
-
-    const csvContent = rows.map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `${fileName}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(downloadUrl);
+    await downloadSessionalWorkbook(session, students);
   },
 
   getReportsSummary: async (sessionId) => {
