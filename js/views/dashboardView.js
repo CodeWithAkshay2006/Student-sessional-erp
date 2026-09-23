@@ -8,7 +8,7 @@ import { api } from '../api.js';
 import { state } from '../state.js';
 
 export async function renderDashboard(container) {
-  const session = state.activeSession;
+  let session = state.activeSession;
   if (!session) {
     container.innerHTML = `
       <div class="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
@@ -19,6 +19,17 @@ export async function renderDashboard(container) {
       </div>
     `;
     return;
+  }
+
+  // Ensure full session with subject relation is loaded
+  if (!session.subject) {
+    try {
+      const fullSessRes = await api.getSession(session.id);
+      if (fullSessRes.data) {
+        session = fullSessRes.data;
+        state.setActiveSession(session);
+      }
+    } catch (_) {}
   }
 
   container.innerHTML = `
@@ -58,7 +69,7 @@ export async function renderDashboard(container) {
             </div>
             <h1 class="text-2xl text-slate-900 font-bold tracking-tight">Faculty Sessional Dashboard</h1>
             <p class="text-sm text-slate-500">
-              Overview for <span class="font-semibold text-primary">${session.subject?.name || 'Subject'} (${session.subject?.code})</span> • AY ${session.academicYear} Sem ${session.semester} Sec ${session.section}
+              Overview for <span class="font-semibold text-primary">${session.subject?.name || 'Subject'} (${session.subject?.code || session.academicYear || ''})</span> • AY ${session.academicYear || ''} Sem ${session.semester || ''} Sec ${session.section || ''}
             </p>
           </div>
           <div class="flex items-center gap-3 shrink-0">

@@ -8,10 +8,21 @@ import { api } from '../api.js';
 import { state } from '../state.js';
 
 export async function renderReports(container) {
-  const session = state.activeSession;
+  let session = state.activeSession;
   if (!session) {
     container.innerHTML = `<div class="p-8 text-center bg-white rounded-xl">Please select an active session first.</div>`;
     return;
+  }
+
+  // Ensure full session with subject relation is loaded
+  if (!session.subject) {
+    try {
+      const fullSessRes = await api.getSession(session.id);
+      if (fullSessRes.data) {
+        session = fullSessRes.data;
+        state.setActiveSession(session);
+      }
+    } catch (_) {}
   }
 
   container.innerHTML = `
@@ -45,13 +56,13 @@ export async function renderReports(container) {
                 Export official sessional workbooks with live native formulas, formatted departmental circulars, and audit logs.
               </p>
               <div class="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-                <span class="px-2.5 py-1 rounded bg-slate-100 text-primary">${session.subject?.name} (${session.subject?.code})</span>
+                <span class="px-2.5 py-1 rounded bg-slate-100 text-primary">${session.subject?.name || 'Subject'} (${session.subject?.code || session.academicYear || ''})</span>
                 <span>•</span>
-                <span>AY ${session.academicYear}</span>
+                <span>AY ${session.academicYear || ''}</span>
                 <span>•</span>
-                <span>Sem ${session.semester}</span>
+                <span>Sem ${session.semester || ''}</span>
                 <span>•</span>
-                <span>Sec ${session.section}</span>
+                <span>Sec ${session.section || ''}</span>
               </div>
             </div>
 
@@ -63,11 +74,11 @@ export async function renderReports(container) {
               </div>
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-500">Fast Cutoff</span>
-                <span class="font-bold text-emerald-700 font-data-tabular">&ge; ${session.fastCutoffPct}%</span>
+                <span class="font-bold text-emerald-700 font-data-tabular">&ge; ${session.fastCutoffPct || 75}%</span>
               </div>
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-500">Slow Cutoff</span>
-                <span class="font-bold text-rose-700 font-data-tabular">&lt; ${session.slowCutoffPct}%</span>
+                <span class="font-bold text-rose-700 font-data-tabular">&lt; ${session.slowCutoffPct || 50}%</span>
               </div>
               <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-200">
                 <span class="text-slate-500">Affiliation</span>
@@ -106,7 +117,7 @@ export async function renderReports(container) {
               <span class="text-[10px] uppercase font-bold text-blue-700 tracking-wider">Official Document</span>
               <h3 class="text-lg font-bold text-slate-900 mt-1">Fast Learner Circular</h3>
               <p class="text-xs text-slate-500 mt-2 leading-relaxed">
-                Formal circular listing all <strong>Fast Learners</strong> (&ge;${session.fastCutoffPct}%) in roll-number order, paired with configured advanced enrichment resource links ready for signature.
+                Formal circular listing all <strong>Fast Learners</strong> (&ge;${session.fastCutoffPct || 75}%) in roll-number order, paired with configured advanced enrichment resource links ready for signature.
               </p>
             </div>
             <div class="mt-6 flex items-center gap-2">
@@ -130,7 +141,7 @@ export async function renderReports(container) {
               <span class="text-[10px] uppercase font-bold text-rose-700 tracking-wider">Official Document</span>
               <h3 class="text-lg font-bold text-slate-900 mt-1">Slow Learner Remedial</h3>
               <p class="text-xs text-slate-500 mt-2 leading-relaxed">
-                Official circular identifying all <strong>Slow Learners</strong> (&lt;${session.slowCutoffPct}%) in roll-number order with scheduled remedial clinics and foundational links.
+                Official circular identifying all <strong>Slow Learners</strong> (&lt;${session.slowCutoffPct || 50}%) in roll-number order with scheduled remedial clinics and foundational links.
               </p>
             </div>
             <div class="mt-6 flex items-center gap-2">

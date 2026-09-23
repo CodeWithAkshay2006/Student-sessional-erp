@@ -107,14 +107,16 @@ export async function renderStudents(container) {
                 ` : students.map((s, idx) => {
                   const m = Array.isArray(s.markEntry) ? (s.markEntry[0] || {}) : (s.markEntry || {});
                   const hasMarks = m && (m.t1 || m.t2 || m.quizAvg);
+                  const roll = String(s.rollNo || '').trim();
+                  const name = String(s.name || '').trim();
                   return `
-                    <tr class="hover:bg-slate-50/80 transition-colors student-row" data-id="${s.id}" data-roll="${s.rollNo.toLowerCase()}" data-name="${s.name.toLowerCase()}">
+                    <tr class="hover:bg-slate-50/80 transition-colors student-row" data-id="${s.id}" data-roll="${roll.toLowerCase()}" data-name="${name.toLowerCase()}">
                       <td class="py-3 px-3 text-center">
-                        <input type="checkbox" class="student-select-cb rounded border-slate-300 text-primary focus:ring-primary w-4 h-4 cursor-pointer" data-id="${s.id}" data-name="${s.name}" />
+                        <input type="checkbox" class="student-select-cb rounded border-slate-300 text-primary focus:ring-primary w-4 h-4 cursor-pointer" data-id="${s.id}" data-name="${name}" />
                       </td>
                       <td class="py-3 px-3 text-center text-slate-400 font-data-tabular">${idx + 1}</td>
-                      <td class="py-3 px-4 font-mono font-bold text-slate-900 text-sm whitespace-nowrap">${s.rollNo}</td>
-                      <td class="py-3 px-4 font-medium text-slate-900">${s.name}</td>
+                      <td class="py-3 px-4 font-mono font-bold text-slate-900 text-sm whitespace-nowrap">${roll || '-'}</td>
+                      <td class="py-3 px-4 font-medium text-slate-900">${name || '-'}</td>
                       <td class="py-3 px-4 text-center">
                         <span class="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Active</span>
                       </td>

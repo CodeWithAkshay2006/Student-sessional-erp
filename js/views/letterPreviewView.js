@@ -8,10 +8,21 @@ import { api } from '../api.js';
 import { state } from '../state.js';
 
 export async function renderLetterPreview(container, initialTrack = 'FAST') {
-  const session = state.activeSession;
+  let session = state.activeSession;
   if (!session) {
     container.innerHTML = `<div class="p-8 text-center bg-white rounded-xl">Please select an active session first.</div>`;
     return;
+  }
+
+  // Ensure full session with subject relation is loaded
+  if (!session.subject) {
+    try {
+      const fullSessRes = await api.getSession(session.id);
+      if (fullSessRes.data) {
+        session = fullSessRes.data;
+        state.setActiveSession(session);
+      }
+    } catch (_) {}
   }
 
   let currentTrack = (initialTrack || 'FAST').toUpperCase();
@@ -37,8 +48,8 @@ export async function renderLetterPreview(container, initialTrack = 'FAST') {
         : 'CIRCULAR: IDENTIFICATION OF SLOW LEARNERS & REMEDIAL INTERVENTION';
 
       const cutoffText = isFast
-        ? `Best Score of ${session.fastCutoffPct}% and above`
-        : `Best Score below ${session.slowCutoffPct}%`;
+        ? `Best Score of ${session.fastCutoffPct || 75}% and above`
+        : `Best Score below ${session.slowCutoffPct || 50}%`;
 
       const preamble = isFast
         ? `Based on the comprehensive continuous sessional evaluations (Test 1, Test 2, and Continuous Quizzes), the following students have demonstrated exceptional academic proficiency by securing a ${cutoffText}. In accordance with departmental academic enhancement policies, these students are recommended for advanced problem-solving modules, peer mentoring, and competitive programming initiatives.`
@@ -129,11 +140,11 @@ export async function renderLetterPreview(container, initialTrack = 'FAST') {
                 </span>
                 <h2 class="text-base sm:text-lg font-extrabold text-primary tracking-tight">${circularTitle}</h2>
                 <div class="flex items-center justify-center flex-wrap gap-2 mt-1 text-[11px] text-slate-600">
-                  <span>Course: <strong class="text-primary">${session.subject?.name} (${session.subject?.code})</strong></span>
+                  <span>Course: <strong class="text-primary">${session.subject?.name || 'Subject'} (${session.subject?.code || session.academicYear || ''})</strong></span>
                   <span>•</span>
-                  <span>AY: <strong class="text-primary">${session.academicYear}</strong></span>
+                  <span>AY: <strong class="text-primary">${session.academicYear || ''}</strong></span>
                   <span>•</span>
-                  <span>Semester ${session.semester} (Section ${session.section})</span>
+                  <span>Semester ${session.semester || ''} (Section ${session.section || ''})</span>
                 </div>
               </div>
 
@@ -169,13 +180,15 @@ export async function renderLetterPreview(container, initialTrack = 'FAST') {
                           <td colspan="6" class="py-4 text-center text-slate-400 text-xs italic">No students classified in this category for the current session.</td>
                         </tr>
                       ` : students.map((s, idx) => {
+                        const roll = s.rollNo || s.student?.rollNo || '-';
+                        const name = s.name || s.student?.name || '-';
                         const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
                         const isEven = idx % 2 === 1;
                         return `
                           <tr class="${isEven ? 'bg-slate-50/50' : 'bg-white'} hover:bg-amber-50/40 transition-colors">
                             <td class="py-2 px-2.5 text-center text-slate-400 font-mono text-[11px]">${idx + 1}</td>
-                            <td class="py-2 px-3 font-mono font-bold text-slate-900 text-[13px] sm:text-sm tracking-normal whitespace-nowrap roll-cell">${s.rollNo}</td>
-                            <td class="py-2 px-3 font-medium text-slate-900 font-sans text-xs">${s.name}</td>
+                            <td class="py-2 px-3 font-mono font-bold text-slate-900 text-[13px] sm:text-sm tracking-normal whitespace-nowrap roll-cell">${roll}</td>
+                            <td class="py-2 px-3 font-medium text-slate-900 font-sans text-xs">${name}</td>
                             <td class="py-2 px-3 text-right text-slate-700 text-xs">${comp.bestScore ?? 0} <span class="text-slate-400 text-[10.5px]">(${comp.bestPct ?? 0}%)</span></td>
                             <td class="py-2 px-3 text-right font-bold text-primary text-xs">${comp.sessionalTotal ?? 0}</td>
                             <td class="py-2 px-3 font-sans">

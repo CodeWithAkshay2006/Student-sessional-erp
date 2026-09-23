@@ -101,7 +101,14 @@ export const api = {
   },
   getSession: async (id) => {
     const res = await supabaseRequest(`Session?id=eq.${id}&select=*,subject:Subject(*)`);
-    return { data: res.data?.[0] || null };
+    const session = res.data?.[0] || null;
+    if (session && !session.subject && session.subjectId) {
+      try {
+        const subRes = await api.getSubject(session.subjectId);
+        if (subRes.data) session.subject = subRes.data;
+      } catch (_) {}
+    }
+    return { data: session };
   },
   createSession: async (data) => {
     const sessionId = data.id || crypto.randomUUID();
@@ -222,14 +229,7 @@ export const api = {
 
   // Marks
   getMarks: async (sessionId) => {
-    const res = await supabaseRequest(`MarkEntry?sessionId=eq.${sessionId}&select=*,student:Student(*)&order=student(rollNo).asc`);
-    if (res.data && Array.isArray(res.data)) {
-      res.data = res.data.map((m) => ({
-        ...m,
-        student: Array.isArray(m.student) ? (m.student[0] || null) : (m.student || null)
-      }));
-    }
-    return res;
+    return api.getResults(sessionId);
   },
   saveBatchMarks: async (sessionId, updates) => {
     for (const update of updates) {
@@ -241,10 +241,22 @@ export const api = {
       if (update.ieScore !== undefined) patchData.ieScore = update.ieScore;
       if (update.taScore !== undefined) patchData.taScore = update.taScore;
 
-      await supabaseRequest(`MarkEntry?studentId=eq.${update.studentId}`, {
+      const patchRes = await supabaseRequest(`MarkEntry?studentId=eq.${update.studentId}`, {
         method: 'PATCH',
         body: JSON.stringify(patchData)
       });
+
+      if (!patchRes.data || patchRes.data.length === 0) {
+        await supabaseRequest('MarkEntry', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            studentId: update.studentId,
+            sessionId,
+            ...patchData
+          })
+        }).catch(() => {});
+      }
     }
 
     // Recompute results immediately after saving marks
@@ -254,24 +266,50 @@ export const api = {
 
   // Results & Stats
   getResults: async (sessionId, params = {}) => {
-    let query = `ComputedResult?sessionId=eq.${sessionId}&select=*,student:Student(*)`;
-    if (params.classification) {
-      query += `&classification=eq.${params.classification}`;
-    }
-    query += '&order=student(rollNo).asc';
-    const res = await supabaseRequest(query);
+    const res = await supabaseRequest(`Student?sessionId=eq.${sessionId}&select=*,markEntry:MarkEntry(*),computedResult:ComputedResult(*)&order=rollNo.asc`);
     if (res.data && Array.isArray(res.data)) {
-      res.data = res.data.map((r) => ({
-        ...r,
-        student: Array.isArray(r.student) ? (r.student[0] || null) : (r.student || null)
-      }));
+      let list = res.data.map((s) => {
+        const m = Array.isArray(s.markEntry) ? (s.markEntry[0] || null) : (s.markEntry || null);
+        let c = Array.isArray(s.computedResult) ? (s.computedResult[0] || null) : (s.computedResult || null);
+        if (!c && m) {
+          const best = computeBest(m.t1, m.t2, m.quizAvg);
+          const maxComp = 20;
+          const pct = computePercentage(best, maxComp);
+          const isAbsent = (m.t1 === 'A' || m.t1 === null || m.t1 === undefined) &&
+                           (m.t2 === 'A' || m.t2 === null || m.t2 === undefined) &&
+                           (m.quizAvg === 'A' || m.quizAvg === null || m.quizAvg === undefined);
+          const classification = isAbsent ? 'SLOW' : getClassificationLabel(classify(pct, 50, 75));
+          c = {
+            bestScore: best,
+            bestPct: pct,
+            classification,
+            sessionalTotal: Number((best + (Number(m.taScore) || 0) + (Number(m.ieScore) || 0)).toFixed(2))
+          };
+        }
+        return {
+          ...s,
+          markEntry: m,
+          computedResult: c
+        };
+      });
+      if (params.classification && params.classification !== 'ALL') {
+        list = list.filter((s) => s.computedResult?.classification === params.classification);
+      }
+      return { data: list };
     }
     return res;
   },
   getStats: async (sessionId) => {
     const res = await api.getResults(sessionId);
     const results = res.data || [];
-    const stats = computeClassStats(results);
+    const statsList = results.map((s) => {
+      const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || s;
+      return {
+        bestScore: c.bestScore !== undefined ? Number(c.bestScore) : 0,
+        classification: c.classification || 'AVERAGE'
+      };
+    });
+    const stats = computeClassStats(statsList);
     return { data: stats };
   },
   recomputeResults: async (sessionId) => {
@@ -282,12 +320,15 @@ export const api = {
     const marksRes = await api.getMarks(sessionId);
     const marksList = marksRes.data || [];
 
-    for (const m of marksList) {
-      const studentId = m.studentId;
+    for (const item of marksList) {
+      const studentId = item.studentId || item.id;
+      const m = (Array.isArray(item.markEntry) ? item.markEntry[0] : item.markEntry) || item;
       const maxComponent = Math.max(session.maxT1 || 20, session.maxT2 || 20, session.maxQuiz || 20);
       const bestScore = computeBest(m.t1, m.t2, m.quizAvg);
       const bestPct = computePercentage(bestScore, maxComponent);
-      const isAbsent = (m.t1 === 'A' || m.t1 === null) && (m.t2 === 'A' || m.t2 === null) && (m.quizAvg === 'A' || m.quizAvg === null);
+      const isAbsent = (m.t1 === 'A' || m.t1 === null || m.t1 === undefined) &&
+                       (m.t2 === 'A' || m.t2 === null || m.t2 === undefined) &&
+                       (m.quizAvg === 'A' || m.quizAvg === null || m.quizAvg === undefined);
       const classification = isAbsent ? 'SLOW' : getClassificationLabel(classify(bestPct, session.slowCutoffPct || 50, session.fastCutoffPct || 75));
 
       const sessionalTotal = computeSessionalTotal(
@@ -341,6 +382,7 @@ export const api = {
   },
 
   // Letters
+  // Letters
   getLetterPreview: async (sessionId, type = 'FAST') => {
     const [sessRes, resultsRes, resourcesRes] = await Promise.all([
       api.getSession(sessionId),
@@ -356,11 +398,20 @@ export const api = {
       `DEPARTMENT OF ${session.subject?.department?.toUpperCase() || 'COMPUTER SCIENCE & ENGINEERING'}\n\n` +
       `OFFICIAL NOTIFICATION: ${type === 'FAST' ? 'ADVANCED / FAST' : 'REMEDIAL / SLOW'} LEARNER INTERVENTION\n` +
       `Academic Session: ${session.academicYear || '2025-26'} (${session.term || 'ODD'} Semester) • Sem: ${session.semester || '5'} • Section: ${session.section || 'A'}\n` +
-      `Subject: ${session.subject?.name || 'Theory of Formal Automata'} (${session.subject?.code || 'BCS402'})\n` +
+      `Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})\n` +
       `Faculty In-Charge: ${session.facultyName || 'Faculty Member'}\n\n` +
       `Total Cohort Identified: ${students.length} Students\n\n` +
       `LIST OF STUDENTS:\n` +
-      students.map((s, idx) => `${idx + 1}. [${s.student?.rollNo}] ${s.student?.name} — Best Assessment: ${s.bestScore} (${s.bestPct}%)`).join('\n') +
+      (students.length > 0
+        ? students.map((s, idx) => {
+            const roll = s.rollNo || s.student?.rollNo || '-';
+            const name = s.name || s.student?.name || '-';
+            const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || s;
+            const bestScore = c.bestScore !== undefined ? c.bestScore : '-';
+            const bestPct = c.bestPct !== undefined ? c.bestPct : '-';
+            return `${idx + 1}. [${roll}] ${name} — Best Assessment: ${bestScore} (${bestPct}%)`;
+          }).join('\n')
+        : '• No students currently identified in this cohort classification.') +
       `\n\nCURATED ACADEMIC ENRICHMENT / REMEDIAL RESOURCES:\n` +
       (resources.length > 0
         ? resources.map((r) => `• ${r.label}: ${r.url}${r.description ? ` (${r.description})` : ''}`).join('\n')
@@ -397,48 +448,63 @@ export const api = {
 
   // Reports
   downloadExcelReport: async (sessionId) => {
-    const [sessRes, resultsRes, marksRes] = await Promise.all([
+    const [sessRes, studentsRes] = await Promise.all([
       api.getSession(sessionId),
-      api.getResults(sessionId),
-      api.getMarks(sessionId)
+      api.getResults(sessionId)
     ]);
 
     const session = sessRes.data || {};
-    const results = resultsRes.data || [];
-    const marks = marksRes.data || [];
+    const students = studentsRes.data || [];
 
-    // Construct CSV
+    // Construct spreadsheet rows
     const rows = [
       ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
-      [`Subject: ${session.subject?.name} (${session.subject?.code})`, `AY: ${session.academicYear}`, `Sem: ${session.semester}`, `Sec: ${session.section}`],
+      [`Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`, `AY: ${session.academicYear || ''}`, `Sem: ${session.semester || ''}`, `Sec: ${session.section || ''}`],
       [''],
-      ['Roll No', 'Student Name', 'T1 (20)', 'T2 (20)', 'Quiz (20)', 'IE Score', 'TA Score', 'Best Score', 'Best %', 'Learner Classification', 'Sessional Total (30)']
+      ['S.No', 'Roll Number', 'Student Name', `T1 (${session.maxT1 || 20})`, `T2 (${session.maxT2 || 20})`, `Quiz (${session.maxQuiz || 20})`, `Best Score (${session.maxT1 || 20})`, 'Best %', `IE (${session.maxIE !== undefined && session.maxIE !== null ? session.maxIE : 5})`, `TA (${session.maxTA !== undefined && session.maxTA !== null ? session.maxTA : 10})`, 'Sessional (30)', 'Classification']
     ];
 
-    for (const r of results) {
-      const m = marks.find((mark) => mark.studentId === r.studentId) || {};
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
+      const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+      const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
+
       rows.push([
-        r.student?.rollNo || '',
-        r.student?.name || '',
-        m.t1 || 'A',
-        m.t2 || 'A',
-        m.quizAvg || 'A',
-        m.ieScore || '0',
-        m.taScore || '0',
-        r.bestScore,
-        `${r.bestPct}%`,
-        r.classification,
-        r.sessionalTotal
+        i + 1,
+        s.rollNo || s.student?.rollNo || '-',
+        s.name || s.student?.name || '-',
+        m.t1 !== null && m.t1 !== undefined ? m.t1 : 'A',
+        m.t2 !== null && m.t2 !== undefined ? m.t2 : 'A',
+        m.quizAvg !== null && m.quizAvg !== undefined ? m.quizAvg : 'A',
+        c.bestScore !== null && c.bestScore !== undefined ? c.bestScore : 0,
+        c.bestPct !== null && c.bestPct !== undefined ? `${c.bestPct}%` : '0%',
+        m.ieScore !== null && m.ieScore !== undefined ? m.ieScore : 0,
+        m.taScore !== null && m.taScore !== undefined ? m.taScore : 0,
+        c.sessionalTotal !== null && c.sessionalTotal !== undefined ? c.sessionalTotal : 0,
+        c.classification || 'AVERAGE'
       ]);
+    }
+
+    const fileName = `Sessional_Report_${session.subject?.code || 'SESSION'}_Sec${session.section || 'A'}`;
+
+    if (typeof window !== 'undefined' && window.XLSX) {
+      try {
+        const ws = window.XLSX.utils.aoa_to_sheet(rows);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, 'Result Analysis');
+        window.XLSX.writeFile(wb, `${fileName}.xlsx`);
+        return;
+      } catch (err) {
+        console.warn('XLSX export failed, falling back to CSV:', err);
+      }
     }
 
     const csvContent = rows.map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const fileName = `Sessional_Report_${session.subject?.code || 'SESSION'}_Sec${session.section || 'A'}.csv`;
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = downloadUrl;
-    a.download = fileName;
+    a.download = `${fileName}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -446,9 +512,12 @@ export const api = {
   },
 
   getReportsSummary: async (sessionId) => {
-    const resultsRes = await api.getResults(sessionId);
+    const [statsRes, resultsRes] = await Promise.all([
+      api.getStats(sessionId),
+      api.getResults(sessionId)
+    ]);
     const results = resultsRes.data || [];
-    const stats = computeClassStats(results);
+    const stats = statsRes.data || {};
     return {
       data: {
         stats,

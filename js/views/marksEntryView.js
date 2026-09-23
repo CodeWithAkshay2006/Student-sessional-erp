@@ -8,10 +8,21 @@ import { api } from '../api.js';
 import { state } from '../state.js';
 
 export async function renderMarksEntry(container) {
-  const session = state.activeSession;
+  let session = state.activeSession;
   if (!session) {
     container.innerHTML = `<div class="p-8 text-center bg-white rounded-xl">Please select an active session first.</div>`;
     return;
+  }
+
+  // Ensure full session with subject relation is loaded
+  if (!session.subject) {
+    try {
+      const fullSessRes = await api.getSession(session.id);
+      if (fullSessRes.data) {
+        session = fullSessRes.data;
+        state.setActiveSession(session);
+      }
+    } catch (_) {}
   }
 
   container.innerHTML = `
@@ -37,7 +48,7 @@ export async function renderMarksEntry(container) {
             </div>
             <h1 class="text-2xl text-slate-900 font-bold tracking-tight mt-1">Sessional Marks Entry</h1>
             <p class="text-sm text-slate-500">
-              ${session.subject?.name || 'Subject'} (${session.subject?.code}) • AY ${session.academicYear} Sem ${session.semester} Sec ${session.section}
+              ${session.subject?.name || 'Subject'} (${session.subject?.code || session.academicYear || ''}) • AY ${session.academicYear || ''} Sem ${session.semester || ''} Sec ${session.section || ''}
             </p>
           </div>
           <div class="flex items-center gap-3">
@@ -96,8 +107,8 @@ export async function renderMarksEntry(container) {
                   return `
                     <tr class="hover:bg-slate-50/70 transition-colors gradebook-row" data-student-id="${s.id}">
                       <td class="py-2 px-3 text-center text-slate-400 font-data-tabular">${idx + 1}</td>
-                      <td class="py-2 px-3 font-mono font-bold text-slate-900 text-sm whitespace-nowrap">${s.rollNo}</td>
-                      <td class="py-2 px-4 font-medium text-slate-800">${s.name}</td>
+                      <td class="py-2 px-3 font-mono font-bold text-slate-900 text-sm whitespace-nowrap">${s.rollNo || s.student?.rollNo || '-'}</td>
+                      <td class="py-2 px-4 font-medium text-slate-800">${s.name || s.student?.name || '-'}</td>
 
                       <!-- In-cell Grade Inputs -->
                       <td class="py-1 px-2 text-right">

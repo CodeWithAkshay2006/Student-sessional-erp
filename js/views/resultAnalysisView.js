@@ -8,10 +8,21 @@ import { api } from '../api.js';
 import { state } from '../state.js';
 
 export async function renderResultAnalysis(container) {
-  const session = state.activeSession;
+  let session = state.activeSession;
   if (!session) {
     container.innerHTML = `<div class="p-8 text-center bg-white rounded-xl">Please select an active session first.</div>`;
     return;
+  }
+
+  // Ensure full session with subject details is populated
+  if (!session.subject) {
+    try {
+      const fullSessRes = await api.getSession(session.id);
+      if (fullSessRes.data) {
+        session = fullSessRes.data;
+        state.setActiveSession(session);
+      }
+    } catch (_) {}
   }
 
   container.innerHTML = `
@@ -48,11 +59,11 @@ export async function renderResultAnalysis(container) {
             <div class="flex flex-wrap items-center gap-2 pt-1.5">
               <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800 text-xs font-bold">
                 <span class="material-symbols-outlined text-[14px] text-primary">menu_book</span>
-                Subject: ${session.subject?.name} (${session.subject?.code})
+                Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})
               </span>
-              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">AY: ${session.academicYear}</span>
-              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">Sem: ${session.semester}</span>
-              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">Sec: ${session.section}</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">AY: ${session.academicYear || ''}</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">Sem: ${session.semester || ''}</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">Sec: ${session.section || ''}</span>
               <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 Benchmark Validated
@@ -223,15 +234,17 @@ export async function renderResultAnalysis(container) {
               </thead>
               <tbody class="divide-y divide-slate-100" id="analysisTableBody">
                 ${students.map((s) => {
+                  const roll = String(s.rollNo || s.student?.rollNo || '').trim();
+                  const name = String(s.name || s.student?.name || '').trim();
                   const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
-                  const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
+                  const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : (s.computedResult || s)) || {};
                   const tier = c.classification || 'AVERAGE';
                   const tierClass = tier === 'FAST' ? 'badge-fast' : tier === 'SLOW' ? 'badge-slow' : 'badge-average';
 
                   return `
-                    <tr class="hover:bg-slate-50/70 transition-colors analysis-row" data-roll="${s.rollNo.toLowerCase()}" data-name="${s.name.toLowerCase()}" data-tier="${tier}">
-                      <td class="py-2.5 px-3 font-mono font-bold text-slate-900 text-sm tracking-tight whitespace-nowrap roll-cell">${s.rollNo}</td>
-                      <td class="py-2 px-3 font-medium text-slate-800">${s.name}</td>
+                    <tr class="hover:bg-slate-50/70 transition-colors analysis-row" data-roll="${roll.toLowerCase()}" data-name="${name.toLowerCase()}" data-tier="${tier}">
+                      <td class="py-2.5 px-3 font-mono font-bold text-slate-900 text-sm tracking-tight whitespace-nowrap roll-cell">${roll || '-'}</td>
+                      <td class="py-2 px-3 font-medium text-slate-800">${name || '-'}</td>
                       <td class="py-2 px-2 text-right font-data-tabular">${m.t1 ?? '-'}</td>
                       <td class="py-2 px-2 text-right font-data-tabular">${m.t2 ?? '-'}</td>
                       <td class="py-2 px-2 text-right font-data-tabular">${m.quizAvg ?? '-'}</td>
