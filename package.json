@@ -1,0 +1,13 @@
+{
+  "name": "vctm-sessional-erp-frontend",
+  "version": "1.0.0",
+  "description": "VCTM Sessional ERP - Autonomous Academic Assessment & Evaluation Portal",
+  "keywords": [
+    "vctm",
+    "sessional-erp",
+    "supabase",
+    "vercel"
+  ],
+  "author": "Akshay Saraswat",
+  "license": "ISC"
+}
