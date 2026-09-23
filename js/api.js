@@ -46,7 +46,20 @@ async function request(endpoint, options = {}) {
     return { blob, fileName };
   }
 
-  const data = await response.json();
+  let data;
+  if (contentType.includes('application/json')) {
+    data = await response.json();
+  } else {
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(`API error (${response.status}): ${rawText.slice(0, 120)}`);
+    }
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new Error(`Server returned non-JSON response (${response.status}). Ensure backend API is deployed.`);
+    }
+  }
 
   if (!response.ok) {
     const errorMsg = data.error?.message || `Request failed with status ${response.status}`;

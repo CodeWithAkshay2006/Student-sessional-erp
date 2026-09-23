@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Subject {
+  id          String         @id @default(uuid())
+  code        String         @unique
+  name        String
+  department  String
+  createdAt   DateTime       @default(now())
+  sessions    Session[]
+  resources   ResourceLink[]
+}
+
+model Session {
+  id             String            @id @default(uuid())
+  subjectId      String
+  subject        Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  academicYear   String            // e.g. "2025-26"
+  term           String            // e.g. "ODD", "EVEN", "SUMMER"
+  semester       Int               // e.g. 5
+  section        String            // e.g. "A"
+  facultyName    String
+  maxT1          Float             @default(20)
+  maxT2          Float             @default(20)
+  maxQuiz        Float             @default(20)
+  maxIE          Float             @default(5)
+  maxTA          Float             @default(10)
+  slowCutoffPct  Float             @default(50)
+  fastCutoffPct  Float             @default(75)
+  totalFormula   String            @default("BEST_PLUS_TA")
+  createdAt      DateTime          @default(now())
+
+  students        Student[]
+  markEntries     MarkEntry[]
+  computedResults ComputedResult[]
+  resources       ResourceLink[]
+  letters         GeneratedLetter[]
+
+  @@unique([subjectId, academicYear, term, semester, section])
+}
+
+model Student {
+  id              String           @id @default(uuid())
+  sessionId       String
+  session         Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  rollNo          String
+  name            String
+  createdAt       DateTime         @default(now())
+
+  markEntry       MarkEntry?
+  computedResult  ComputedResult?
+
+  @@unique([sessionId, rollNo])
+}
+
+model MarkEntry {
+  id          String    @id @default(uuid())
+  studentId   String    @unique
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessionId   String
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  t1          String?   // Preserves "A" (Absent) or numeric string e.g. "18.5"
+  t2          String?
+  quizAvg     String?
+  ieScore     String?
+  taScore     String?
+  updatedAt   DateTime  @updatedAt
+}
+
+model ComputedResult {
+  id              String    @id @default(uuid())
+  studentId       String    @unique
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessionId       String
+  session         Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  bestScore       Float     @default(0)
+  bestPct         Float     @default(0)
+  classification  String    // "FAST", "AVERAGE", "SLOW"
+  sessionalTotal  Float     @default(0)
+  isAbsent        Boolean   @default(false)
+  updatedAt       DateTime  @updatedAt
+}
+
+model ResourceLink {
+  id          String    @id @default(uuid())
+  sessionId   String?
+  session     Session?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  subjectId   String?
+  subject     Subject?  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  category    String    // "FAST" or "SLOW"
+  label       String
+  url         String
+  description String?
+}
+
+model GeneratedLetter {
+  id          String    @id @default(uuid())
+  sessionId   String
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type        String    // "FAST" or "SLOW"
+  filePath    String
+  fileName    String
+  studentCount Int      @default(0)
+  generatedAt DateTime  @default(now())
+}

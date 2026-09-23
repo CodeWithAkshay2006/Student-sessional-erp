@@ -1,13 +1,25 @@
 {
-  "name": "vctm-sessional-erp-frontend",
+  "name": "vctm-sessional-erp",
   "version": "1.0.0",
-  "description": "VCTM Sessional ERP - Autonomous Academic Assessment & Evaluation Portal",
-  "keywords": [
-    "vctm",
-    "sessional-erp",
-    "supabase",
-    "vercel"
-  ],
-  "author": "Akshay Saraswat",
-  "license": "ISC"
+  "type": "module",
+  "scripts": {
+    "postinstall": "prisma generate --schema=backend/prisma/schema.prisma",
+    "start": "node backend/src/server.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "cors": "^2.8.5",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.4.5",
+    "docx": "^8.5.0",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
 }
