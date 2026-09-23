@@ -218,95 +218,131 @@ export async function renderUploadMarks(container) {
   let currentFile = null;
   let stagedAudit = null;
 
+  const setElText = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text !== undefined && text !== null ? text : '';
+  };
+
+  const setElHtml = (id, html) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  };
+
+  const toggleEl = (id, show) => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (show) el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    }
+  };
+
   const handleFileUpload = async (file, commit = false) => {
     currentFile = file;
-    document.getElementById('stagedFileName').textContent = file.name;
-    document.getElementById('stagedFileMeta').textContent = `${(file.size / 1024).toFixed(1)} KB • Processing...`;
-    document.getElementById('stagedBadge').innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Validating`;
+    setElText('stagedFileName', file.name);
+    setElText('stagedFileMeta', `${(file.size / 1024).toFixed(1)} KB • ${commit ? 'Committing to Supabase...' : 'Validating...'}`);
+    setElHtml('stagedBadge', commit
+      ? `<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Committing`
+      : `<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Validating`);
+
+    const commitBtn = document.getElementById('commitBtn');
+    if (commitBtn && commit) {
+      commitBtn.disabled = true;
+      commitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span><span>Committing to Database...</span>`;
+      commitBtn.className = 'inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-600 text-white font-bold text-xs shadow transition-all cursor-wait';
+    }
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
       const res = await api.uploadMarksFile(session.id, formData, commit);
-      const data = res.data;
-      stagedAudit = data.audit;
+      const data = res.data || {};
+      stagedAudit = data.audit || { totalScanned: 0, validCount: 0, errorCount: 0, errors: [] };
 
-      document.getElementById('kpiScanned').textContent = stagedAudit.totalScanned;
-      document.getElementById('kpiScannedSub').textContent = `100% parsed`;
-      document.getElementById('kpiValid').textContent = stagedAudit.validCount;
-      document.getElementById('kpiValidSub').textContent = commit ? 'Committed' : `${((stagedAudit.validCount / (stagedAudit.totalScanned || 1)) * 100).toFixed(1)}% valid`;
-      document.getElementById('kpiErrors').textContent = stagedAudit.errorCount;
-      document.getElementById('kpiErrorsSub').textContent = `${stagedAudit.errorCount} row errors`;
+      setElText('kpiScanned', stagedAudit.totalScanned);
+      setElText('kpiScannedSub', '100% parsed');
+      setElText('kpiValid', stagedAudit.validCount);
+      setElText('kpiValidSub', commit ? 'Committed' : `${((stagedAudit.validCount / (stagedAudit.totalScanned || 1)) * 100).toFixed(1)}% valid`);
+      setElText('kpiErrors', stagedAudit.errorCount);
+      setElText('kpiErrorsSub', `${stagedAudit.errorCount} row errors`);
 
-      const commitBtn = document.getElementById('commitBtn');
-      if (stagedAudit.validCount > 0 && !commit) {
-        commitBtn.disabled = false;
-        commitBtn.classList.remove('bg-slate-300', 'cursor-not-allowed');
-        commitBtn.classList.add('bg-primary', 'hover:bg-slate-900', 'active:scale-[0.98]');
-      }
-
-      document.getElementById('stagedBadge').innerHTML = commit
+      setElHtml('stagedBadge', commit
         ? `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Committed`
-        : `<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Staged`;
+        : `<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Staged`);
 
-      if (commit) {
-        document.getElementById('commitSuccessBanner').classList.remove('hidden');
-        commitBtn.disabled = true;
-        commitBtn.classList.add('bg-slate-300', 'cursor-not-allowed');
+      const liveCommitBtn = document.getElementById('commitBtn');
+      if (liveCommitBtn) {
+        if (commit) {
+          liveCommitBtn.disabled = true;
+          liveCommitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">done_all</span><span>Successfully Committed</span>`;
+          liveCommitBtn.className = 'inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow cursor-default';
+          toggleEl('commitSuccessBanner', true);
+        } else if (stagedAudit.validCount > 0) {
+          liveCommitBtn.disabled = false;
+          liveCommitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">publish</span><span>Commit Valid Rows to DB</span>`;
+          liveCommitBtn.className = 'inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-xs shadow hover:bg-slate-900 active:scale-[0.98] transition-all';
+        } else {
+          liveCommitBtn.disabled = true;
+          liveCommitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">publish</span><span>Commit Valid Rows to DB</span>`;
+          liveCommitBtn.className = 'inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-300 text-white font-bold text-xs shadow transition-all cursor-not-allowed';
+        }
       }
 
       // Render Preview Table
-      const previewSection = document.getElementById('previewSection');
       const previewTableBody = document.getElementById('previewTableBody');
-      const previewCountBadge = document.getElementById('previewCountBadge');
-
       if (data.preview && data.preview.length > 0) {
-        previewSection.classList.remove('hidden');
-        previewCountBadge.textContent = `${data.preview.length} Rows Ingested`;
-        previewTableBody.innerHTML = data.preview.map((row, idx) => `
-          <tr class="hover:bg-slate-50 transition-colors ${row.hasError ? 'bg-rose-50/50' : ''}">
-            <td class="py-2 px-3 text-slate-400 font-mono">${idx + 1}</td>
-            <td class="py-2 px-3 font-mono font-bold text-slate-900">${row.rollNo}</td>
-            <td class="py-2 px-3 font-semibold text-slate-800">${row.name}</td>
-            <td class="py-2 px-3 text-center ${row.t1 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t1 !== null && row.t1 !== undefined ? row.t1 : '-'}</td>
-            <td class="py-2 px-3 text-center ${row.t2 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t2 !== null && row.t2 !== undefined ? row.t2 : '-'}</td>
-            <td class="py-2 px-3 text-center ${row.quizAvg === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.quizAvg !== null && row.quizAvg !== undefined ? row.quizAvg : '-'}</td>
-            <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.ieScore !== null && row.ieScore !== undefined ? row.ieScore : '-'}</td>
-            <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.taScore !== null && row.taScore !== undefined ? row.taScore : '-'}</td>
-            <td class="py-2 px-3 text-center">
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${row.hasError ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
-                ${row.hasError ? 'Issue' : 'Valid'}
-              </span>
-            </td>
-          </tr>
-        `).join('');
+        toggleEl('previewSection', true);
+        setElText('previewCountBadge', `${data.preview.length} Rows Ingested`);
+        if (previewTableBody) {
+          previewTableBody.innerHTML = data.preview.map((row, idx) => `
+            <tr class="hover:bg-slate-50 transition-colors ${row.hasError ? 'bg-rose-50/50' : ''}">
+              <td class="py-2 px-3 text-slate-400 font-mono">${idx + 1}</td>
+              <td class="py-2 px-3 font-mono font-bold text-slate-900">${row.rollNo}</td>
+              <td class="py-2 px-3 font-semibold text-slate-800">${row.name}</td>
+              <td class="py-2 px-3 text-center ${row.t1 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t1 !== null && row.t1 !== undefined ? row.t1 : '-'}</td>
+              <td class="py-2 px-3 text-center ${row.t2 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t2 !== null && row.t2 !== undefined ? row.t2 : '-'}</td>
+              <td class="py-2 px-3 text-center ${row.quizAvg === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.quizAvg !== null && row.quizAvg !== undefined ? row.quizAvg : '-'}</td>
+              <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.ieScore !== null && row.ieScore !== undefined ? row.ieScore : '-'}</td>
+              <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.taScore !== null && row.taScore !== undefined ? row.taScore : '-'}</td>
+              <td class="py-2 px-3 text-center">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${row.hasError ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
+                  ${row.hasError ? 'Issue' : 'Valid'}
+                </span>
+              </td>
+            </tr>
+          `).join('');
+        }
       } else {
-        previewSection.classList.add('hidden');
+        toggleEl('previewSection', false);
       }
 
       // Render Diagnostic Errors
-      const diagSection = document.getElementById('diagnosticSection');
       const diagTableBody = document.getElementById('diagnosticTableBody');
-      const diagCount = document.getElementById('diagnosticCount');
-
       if (stagedAudit.errors && stagedAudit.errors.length > 0) {
-        diagSection.classList.remove('hidden');
-        diagCount.textContent = `${stagedAudit.errors.length} Issues Flagged`;
-        diagTableBody.innerHTML = stagedAudit.errors.map((err) => `
-          <tr class="hover:bg-rose-50/40">
-            <td class="py-2 px-3 font-mono font-bold text-slate-700">#${err.row}</td>
-            <td class="py-2 px-3 font-mono font-bold text-slate-900 text-sm whitespace-nowrap">${err.rollNo || '-'}</td>
-            <td class="py-2 px-3 font-mono text-slate-600">${err.column || '-'}</td>
-            <td class="py-2 px-4 text-rose-700 font-medium">${err.message}</td>
-          </tr>
-        `).join('');
+        toggleEl('diagnosticSection', true);
+        setElText('diagnosticCount', `${stagedAudit.errors.length} Issues Flagged`);
+        if (diagTableBody) {
+          diagTableBody.innerHTML = stagedAudit.errors.map((err) => `
+            <tr class="hover:bg-rose-50/40">
+              <td class="py-2 px-3 font-mono font-bold text-slate-700">#${err.row}</td>
+              <td class="py-2 px-3 font-mono font-bold text-slate-900 text-sm whitespace-nowrap">${err.rollNo || '-'}</td>
+              <td class="py-2 px-3 font-mono text-slate-600">${err.column || '-'}</td>
+              <td class="py-2 px-4 text-rose-700 font-medium">${err.message}</td>
+            </tr>
+          `).join('');
+        }
       } else {
-        diagSection.classList.add('hidden');
+        toggleEl('diagnosticSection', false);
       }
     } catch (err) {
       alert(`Spreadsheet ingestion error: ${err.message}`);
-      document.getElementById('stagedBadge').innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Failed`;
+      setElHtml('stagedBadge', `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Failed`);
+      const errorCommitBtn = document.getElementById('commitBtn');
+      if (errorCommitBtn && commit) {
+        errorCommitBtn.disabled = false;
+        errorCommitBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">publish</span><span>Retry Commit to DB</span>`;
+        errorCommitBtn.className = 'inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-xs shadow hover:bg-slate-900 transition-all';
+      }
     }
   };
 

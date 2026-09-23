@@ -621,87 +621,116 @@ export const api = {
 
     // 5. Database Commit Phase (Only when commit === true)
     if (commit) {
-      for (const row of parsedRows) {
-        if (row.hasError) continue;
+      const validRows = parsedRows.filter((r) => !r.hasError);
 
-        // Find or create student
-        const existingStudentRes = await supabaseRequest(`Student?sessionId=eq.${sessionId}&rollNo=eq.${encodeURIComponent(row.rollNo)}&select=*`);
-        let student = existingStudentRes.data?.[0];
+      if (validRows.length > 0) {
+        // Step 1: Bulk Upsert all Students in 1 request
+        const studentPayloads = validRows.map((r) => ({
+          sessionId,
+          rollNo: r.rollNo,
+          name: r.name
+        }));
 
-        if (!student) {
-          const createRes = await supabaseRequest('Student', {
-            method: 'POST',
-            body: JSON.stringify({
-              id: crypto.randomUUID(),
-              sessionId,
-              rollNo: row.rollNo,
-              name: row.name
-            })
-          });
-          student = createRes.data?.[0];
-        } else if (row.name && row.name !== student.name) {
-          await supabaseRequest(`Student?id=eq.${student.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ name: row.name })
+        const studentsRes = await supabaseRequest('Student?on_conflict=sessionId,rollNo', {
+          method: 'POST',
+          prefer: 'resolution=merge-duplicates,return=representation',
+          body: JSON.stringify(studentPayloads)
+        });
+
+        const studentMap = new Map();
+        if (studentsRes.data && Array.isArray(studentsRes.data)) {
+          for (const s of studentsRes.data) {
+            studentMap.set(s.rollNo, s.id);
+          }
+        }
+
+        // Fallback: If any student ID was not returned, query all session students once
+        if (validRows.some((r) => !studentMap.has(r.rollNo))) {
+          const allSessionStudents = await supabaseRequest(`Student?sessionId=eq.${sessionId}&select=id,rollNo`);
+          for (const s of allSessionStudents.data || []) {
+            studentMap.set(s.rollNo, s.id);
+          }
+        }
+
+        // Step 2: Bulk Upsert all MarkEntries in 1 request
+        const markPayloads = [];
+        for (const row of validRows) {
+          const studentId = studentMap.get(row.rollNo);
+          if (!studentId) continue;
+          markPayloads.push({
+            studentId,
+            sessionId,
+            t1: row.t1 !== null && row.t1 !== undefined ? String(row.t1) : null,
+            t2: row.t2 !== null && row.t2 !== undefined ? String(row.t2) : null,
+            quizAvg: row.quizAvg !== null && row.quizAvg !== undefined ? String(row.quizAvg) : null,
+            ieScore: row.ieScore !== null && row.ieScore !== undefined ? String(row.ieScore) : null,
+            taScore: row.taScore !== null && row.taScore !== undefined ? String(row.taScore) : null
           });
         }
 
-        if (!student) continue;
-
-        // Upsert MarkEntry
-        const existingMarkRes = await supabaseRequest(`MarkEntry?studentId=eq.${student.id}&select=*`);
-        const existingMark = existingMarkRes.data?.[0];
-
-        const markPayload = {
-          t1: row.t1 !== null && row.t1 !== undefined ? String(row.t1) : null,
-          t2: row.t2 !== null && row.t2 !== undefined ? String(row.t2) : null,
-          quizAvg: row.quizAvg !== null && row.quizAvg !== undefined ? String(row.quizAvg) : null,
-          ieScore: row.ieScore !== null && row.ieScore !== undefined ? String(row.ieScore) : null,
-          taScore: row.taScore !== null && row.taScore !== undefined ? String(row.taScore) : null
-        };
-
-        if (existingMark) {
-          await supabaseRequest(`MarkEntry?id=eq.${existingMark.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(markPayload)
-          });
-        } else {
-          await supabaseRequest('MarkEntry', {
+        if (markPayloads.length > 0) {
+          await supabaseRequest('MarkEntry?on_conflict=studentId', {
             method: 'POST',
-            body: JSON.stringify({
-              id: crypto.randomUUID(),
-              studentId: student.id,
-              sessionId,
-              ...markPayload
-            })
+            prefer: 'resolution=merge-duplicates,return=representation',
+            body: JSON.stringify(markPayloads)
           });
         }
 
-        // Ensure ComputedResult exists
-        const existingCompRes = await supabaseRequest(`ComputedResult?studentId=eq.${student.id}&select=*`);
-        if (!existingCompRes.data?.[0]) {
-          await supabaseRequest('ComputedResult', {
+        // Step 3: Compute and Bulk Upsert ComputedResults in 1 request
+        const maxComponent = Math.max(maxT1, maxT2, maxQuiz);
+        const compPayloads = [];
+        for (const row of validRows) {
+          const studentId = studentMap.get(row.rollNo);
+          if (!studentId) continue;
+
+          const bestScore = computeBest(row.t1, row.t2, row.quizAvg);
+          const bestPct = computePercentage(bestScore, maxComponent);
+          const isAbsent = (row.t1 === 'A' || row.t1 === null) && (row.t2 === 'A' || row.t2 === null) && (row.quizAvg === 'A' || row.quizAvg === null);
+          const classification = isAbsent ? 'SLOW' : getClassificationLabel(classify(bestPct, session.slowCutoffPct || 50, session.fastCutoffPct || 75));
+
+          const sessionalTotal = computeSessionalTotal(
+            {
+              bestScore,
+              t1: row.t1,
+              t2: row.t2,
+              quizAvg: row.quizAvg,
+              ieScore: row.ieScore,
+              taScore: row.taScore
+            },
+            session.totalFormula || 'BEST_PLUS_TA',
+            {
+              maxT1,
+              maxT2,
+              maxQuiz,
+              maxIE,
+              maxTA
+            }
+          );
+
+          compPayloads.push({
+            studentId,
+            sessionId,
+            bestScore,
+            bestPct,
+            classification,
+            sessionalTotal,
+            isAbsent
+          });
+        }
+
+        if (compPayloads.length > 0) {
+          await supabaseRequest('ComputedResult?on_conflict=studentId', {
             method: 'POST',
-            body: JSON.stringify({
-              id: crypto.randomUUID(),
-              studentId: student.id,
-              sessionId,
-              classification: 'SLOW',
-              bestScore: 0,
-              bestPct: 0,
-              sessionalTotal: 0
-            })
+            prefer: 'resolution=merge-duplicates,return=representation',
+            body: JSON.stringify(compPayloads)
           });
         }
       }
 
-      // Recompute all cohort statistics and learner classifications
-      await api.recomputeResults(sessionId);
-
       return {
         data: {
           committed: true,
-          count: parsedRows.length,
+          count: validRows.length,
           preview: parsedRows,
           totalRows: parsedRows.length,
           audit
