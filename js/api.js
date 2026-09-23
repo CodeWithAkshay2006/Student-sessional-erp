@@ -81,9 +81,13 @@ export const api = {
     return { data: res.data?.[0] || null };
   },
   createSubject: async (data) => {
+    const payload = {
+      id: data.id || crypto.randomUUID(),
+      ...data
+    };
     const res = await supabaseRequest('Subject', {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
     return { data: res.data?.[0] || null };
   },
@@ -100,14 +104,49 @@ export const api = {
     return { data: res.data?.[0] || null };
   },
   createSession: async (data) => {
-    const res = await supabaseRequest('Session', {
+    const sessionId = data.id || crypto.randomUUID();
+    const payload = {
+      id: sessionId,
+      ...data
+    };
+    const res = await supabaseRequest('Session?select=*,subject:Subject(*)', {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
-    return { data: res.data?.[0] || null };
+    const session = res.data?.[0] || null;
+
+    // Seed default starter resource links for this session
+    if (session) {
+      Promise.all([
+        supabaseRequest('ResourceLink', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            sessionId: session.id,
+            category: 'FAST',
+            label: 'Advanced Problem Solving & LeetCode Hard',
+            url: 'https://leetcode.com/problemset/all/?difficulty=HARD',
+            description: 'Advanced algorithms, trees, and dynamic programming challenges.'
+          })
+        }).catch(() => {}),
+        supabaseRequest('ResourceLink', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: crypto.randomUUID(),
+            sessionId: session.id,
+            category: 'SLOW',
+            label: 'NPTEL Core Computer Science Remedial Lectures',
+            url: 'https://nptel.ac.in/courses',
+            description: 'Foundational video lectures and step-by-step problem breakdowns.'
+          })
+        }).catch(() => {})
+      ]);
+    }
+
+    return { data: session };
   },
   updateSession: async (id, data) => {
-    const res = await supabaseRequest(`Session?id=eq.${id}`, {
+    const res = await supabaseRequest(`Session?id=eq.${id}&select=*,subject:Subject(*)`, {
       method: 'PATCH',
       body: JSON.stringify(data)
     });
@@ -124,7 +163,7 @@ export const api = {
   addSessionResource: async (id, data) => {
     const res = await supabaseRequest('ResourceLink', {
       method: 'POST',
-      body: JSON.stringify({ ...data, sessionId: id })
+      body: JSON.stringify({ ...data, id: data.id || crypto.randomUUID(), sessionId: id })
     });
     return { data: res.data?.[0] || null };
   },
@@ -137,20 +176,22 @@ export const api = {
     return supabaseRequest(`Student?sessionId=eq.${sessionId}&select=*,markEntry:MarkEntry(*),computedResult:ComputedResult(*)&order=rollNo.asc`);
   },
   addStudent: async (sessionId, data) => {
+    const studentId = data.id || crypto.randomUUID();
     const res = await supabaseRequest('Student', {
       method: 'POST',
-      body: JSON.stringify({ ...data, sessionId })
+      body: JSON.stringify({ ...data, id: studentId, sessionId })
     });
     const student = res.data?.[0];
     if (student) {
       await Promise.all([
         supabaseRequest('MarkEntry', {
           method: 'POST',
-          body: JSON.stringify({ studentId: student.id, sessionId })
+          body: JSON.stringify({ id: crypto.randomUUID(), studentId: student.id, sessionId })
         }).catch(() => {}),
         supabaseRequest('ComputedResult', {
           method: 'POST',
           body: JSON.stringify({
+            id: crypto.randomUUID(),
             studentId: student.id,
             sessionId,
             classification: 'SLOW',
