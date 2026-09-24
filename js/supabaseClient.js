@@ -156,10 +156,20 @@ export const supabaseAuth = {
    * @param {Function} callback (event, session)
    */
   onAuthStateChange(callback) {
-    const client = getSupabaseClient();
-    if (!client) {
-      return { data: { subscription: { unsubscribe: () => {} } } };
+  const client = getSupabaseClient();
+
+  if (!client) {
+    return { data: { subscription: { unsubscribe: () => {} } } };
+  }
+
+  return client.auth.onAuthStateChange((event, session) => {
+    if (session?.access_token) {
+      localStorage.setItem('sessional_token', session.access_token);
+    } else if (event === 'SIGNED_OUT') {
+      localStorage.removeItem('sessional_token');
     }
-    return client.auth.onAuthStateChange(callback);
+
+    callback(event, session);
+  });
   }
 };
