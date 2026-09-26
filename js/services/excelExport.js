@@ -69,7 +69,7 @@ export async function downloadSessionalWorkbook(session, studentsWithResults = [
         'Best %',
         `IE (${maxIE})`,
         `TA (${maxTA})`,
-        'Sessional (30)',
+        'Internal (30)',
         'Classification'
       ];
 
@@ -403,7 +403,7 @@ export async function downloadSessionalWorkbook(session, studentsWithResults = [
         ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
         [`Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`, `AY: ${session.academicYear || ''}`, `Sem: ${session.semester || ''}`, `Sec: ${session.section || ''}`],
         [''],
-        ['S.No', 'Roll Number', 'Student Name', `T1 (${session.maxT1 || 20})`, `T2 (${session.maxT2 || 20})`, `Quiz (${session.maxQuiz || 20})`, `Best Score (${session.maxT1 || 20})`, 'Best %', `IE (${session.maxIE || 5})`, `TA (${session.maxTA || 10})`, 'Sessional (30)', 'Classification']
+        ['S.No', 'Roll Number', 'Student Name', `T1 (${session.maxT1 || 20})`, `T2 (${session.maxT2 || 20})`, `Quiz (${session.maxQuiz || 20})`, `Best Score (${session.maxT1 || 20})`, 'Best %', `IE (${session.maxIE || 5})`, `TA (${session.maxTA || 10})`, 'Internal (30)', 'Classification']
       ];
 
       for (let i = 0; i < studentsWithResults.length; i++) {
@@ -500,7 +500,7 @@ export async function downloadSessionalWorkbook(session, studentsWithResults = [
   const fallbackRows = [
     ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
     [`Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`, `AY: ${session.academicYear || ''}`, `Sem: ${session.semester || ''}`, `Sec: ${session.section || ''}`],
-    ['S.No', 'Roll Number', 'Student Name', 'T1', 'T2', 'Quiz', 'Best Score', 'Best %', 'IE', 'TA', 'Sessional (30)', 'Classification']
+    ['S.No', 'Roll Number', 'Student Name', 'T1', 'T2', 'Quiz', 'Best Score', 'Best %', 'IE', 'TA', 'Internal (30)', 'Classification']
   ];
   for (let i = 0; i < studentsWithResults.length; i++) {
     const s = studentsWithResults[i];

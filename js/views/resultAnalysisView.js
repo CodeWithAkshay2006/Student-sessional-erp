@@ -228,7 +228,7 @@ export async function renderResultAnalysis(container) {
                   <th class="py-2.5 px-3 text-right bg-slate-100/70 font-bold">Best %</th>
                   <th class="py-2.5 px-2 text-right">IE (${session.maxIE})</th>
                   <th class="py-2.5 px-2 text-right">TA (${session.maxTA})</th>
-                  <th class="py-2.5 px-3 text-right font-bold text-primary">Sessional (30)</th>
+                  <th class="py-2.5 px-3 text-right font-bold text-primary">Internal (30)</th>
                   <th class="py-2.5 px-3 text-center">Classification</th>
                 </tr>
               </thead>

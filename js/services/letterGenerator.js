@@ -87,7 +87,7 @@ export async function generateCircularDocx(session, type = 'FAST', students = []
             tableHeaderCell('Roll No', 24, AlignmentType.CENTER),
             tableHeaderCell('Student Name', 32, AlignmentType.LEFT),
             tableHeaderCell('Best Score', 18, AlignmentType.RIGHT),
-            tableHeaderCell('Sessional (30)', 18, AlignmentType.RIGHT)
+            tableHeaderCell('Internal (30)', 18, AlignmentType.RIGHT)
           ]
         })
       ];
@@ -545,7 +545,7 @@ export async function generateCircularDocx(session, type = 'FAST', students = []
             <th style="width: 24%;">Roll Number</th>
             <th style="width: 34%;">Student Name</th>
             <th style="width: 17%; text-align: right;">Best Score</th>
-            <th style="width: 17%; text-align: right;">Sessional (30)</th>
+            <th style="width: 17%; text-align: right;">Internal (30)</th>
           </tr>
         </thead>
         <tbody>

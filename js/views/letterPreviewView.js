@@ -170,7 +170,7 @@ export async function renderLetterPreview(container, initialTrack = 'FAST') {
                         <th class="py-2 px-3 w-40 sm:w-48 text-left font-bold">Roll Number</th>
                         <th class="py-2 px-3">Student Name</th>
                         <th class="py-2 px-3 text-right w-24">Best Score</th>
-                        <th class="py-2 px-3 text-right w-24">Sessional (30)</th>
+                        <th class="py-2 px-3 text-right w-24">Internal (30)</th>
                         <th class="py-2 px-3 w-40">Prescribed Focus</th>
                       </tr>
                     </thead>

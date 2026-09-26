@@ -95,7 +95,7 @@ export async function renderMarksEntry(container) {
                   <th class="py-2.5 px-3 text-right bg-slate-100/70 w-24">Best %</th>
                   <th class="py-2.5 px-2 text-right w-20">IE (${session.maxIE})</th>
                   <th class="py-2.5 px-2 text-right w-20">TA (${session.maxTA})</th>
-                  <th class="py-2.5 px-3 text-right font-bold text-primary w-28">Sessional (30)</th>
+                  <th class="py-2.5 px-3 text-right font-bold text-primary w-28">Internal (30)</th>
                   <th class="py-2.5 px-3 text-center w-28">Learner Tier</th>
                 </tr>
               </thead>

@@ -278,7 +278,7 @@ export async function renderDashboard(container) {
                   <th class="py-2.5 px-3 text-right">Quiz</th>
                   <th class="py-2.5 px-3 text-right">Best</th>
                   <th class="py-2.5 px-3 text-right">Best %</th>
-                  <th class="py-2.5 px-3 text-right font-bold text-primary">Sessional (30)</th>
+                  <th class="py-2.5 px-3 text-right font-bold text-primary">Internal (30)</th>
                   <th class="py-2.5 px-3 text-center">Tier</th>
                 </tr>
               </thead>
