@@ -73,6 +73,8 @@ export async function renderMarksEntry(container) {
             <span>•</span>
             <span>Quiz Max: <strong>${session.maxQuiz}</strong></span>
             <span>•</span>
+            <span>PUT Max: <strong>${session.maxPUT || 70}</strong></span>
+            <span>•</span>
             <span>IE Max: <strong>${session.maxIE}</strong></span>
             <span>•</span>
             <span>TA Max: <strong>${session.maxTA}</strong></span>
@@ -88,9 +90,10 @@ export async function renderMarksEntry(container) {
                   <th class="py-2.5 px-3 w-12 text-center">S.No</th>
                   <th class="py-2.5 px-3 min-w-[140px] w-36">Roll No</th>
                   <th class="py-2.5 px-4 min-w-[180px]">Student Name</th>
-                  <th class="py-2.5 px-2 text-right w-24">T1 (${session.maxT1})</th>
-                  <th class="py-2.5 px-2 text-right w-24">T2 (${session.maxT2})</th>
-                  <th class="py-2.5 px-2 text-right w-24">Quiz (${session.maxQuiz})</th>
+                  <th class="py-2.5 px-2 text-right w-20">T1 (${session.maxT1})</th>
+                  <th class="py-2.5 px-2 text-right w-20">T2 (${session.maxT2})</th>
+                  <th class="py-2.5 px-2 text-right w-20">Quiz (${session.maxQuiz})</th>
+                  <th class="py-2.5 px-2 text-right w-24">PUT (${session.maxPUT || 70})</th>
                   <th class="py-2.5 px-3 text-right bg-slate-100/70 w-24">Best (${session.maxT1})</th>
                   <th class="py-2.5 px-3 text-right bg-slate-100/70 w-24">Best %</th>
                   <th class="py-2.5 px-2 text-right w-20">IE (${session.maxIE})</th>
@@ -120,13 +123,17 @@ export async function renderMarksEntry(container) {
                       <td class="py-1 px-2 text-right">
                         <input type="text" class="mark-input mark-quiz w-full text-right px-2 py-1 border border-slate-200 rounded font-data-tabular text-sm font-semibold focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none" value="${m.quizAvg || ''}" placeholder="-" />
                       </td>
+                      <td class="py-1 px-2 text-right">
+                        <input type="text" class="mark-input mark-put w-full text-right px-2 py-1 border border-slate-200 rounded font-data-tabular text-sm font-semibold focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none" value="${m.putMarks || ''}" placeholder="-" title="PUT marks (out of ${session.maxPUT || 70}) - auto multiplied by 0.2857 for Best" />
+                        <span class="put-scaled-hint text-[10px] text-slate-400 block text-right pr-0.5">${m.putMarks && parseVal(m.putMarks) !== null ? `(${Math.round(parseVal(m.putMarks) * 0.2857)})` : ''}</span>
+                      </td>
 
                       <!-- Calculated Columns (Real-time Updated) -->
                       <td class="py-2 px-3 text-right font-data-tabular font-bold text-slate-800 bg-slate-50/60 cell-best">
-                        ${c.bestScore !== undefined ? c.bestScore : '-'}
+                        ${c.bestScore !== undefined && c.bestScore !== null ? Math.round(Number(c.bestScore)) : '-'}
                       </td>
                       <td class="py-2 px-3 text-right font-data-tabular font-semibold text-primary bg-slate-50/60 cell-pct">
-                        ${c.bestPct !== undefined ? c.bestPct + '%' : '-'}
+                        ${c.bestPct !== undefined && c.bestPct !== null ? Math.round(Number(c.bestPct)) + '%' : '-'}
                       </td>
 
                       <!-- IE & TA Inputs -->
@@ -139,7 +146,7 @@ export async function renderMarksEntry(container) {
 
                       <!-- Sessional Total & Tier -->
                       <td class="py-2 px-3 text-right font-data-tabular font-bold text-primary cell-sessional">
-                        ${c.sessionalTotal !== undefined ? c.sessionalTotal : '-'}
+                        ${c.sessionalTotal !== undefined && c.sessionalTotal !== null ? Math.round(c.sessionalTotal) : '-'}
                       </td>
                       <td class="py-2 px-3 text-center cell-tier">
                         <span class="inline-block px-2.5 py-0.5 rounded text-[11px] font-bold ${tierClass}">
@@ -172,10 +179,20 @@ export async function renderMarksEntry(container) {
       const t1 = parseVal(row.querySelector('.mark-t1').value);
       const t2 = parseVal(row.querySelector('.mark-t2').value);
       const quiz = parseVal(row.querySelector('.mark-quiz').value);
+      const put = parseVal(row.querySelector('.mark-put').value);
       const ie = parseVal(row.querySelector('.mark-ie').value) || 0;
       const ta = parseVal(row.querySelector('.mark-ta').value) || 0;
 
+      const scaledPut = put !== null ? Math.round(put * 0.2857) : null;
+      const putHint = row.querySelector('.put-scaled-hint');
+      if (putHint) {
+        putHint.textContent = scaledPut !== null ? `(${scaledPut})` : '';
+      }
+
       const validTests = [t1, t2, quiz].filter((v) => v !== null);
+      if (scaledPut !== null) {
+        validTests.push(scaledPut);
+      }
       const best = validTests.length > 0 ? Math.max(...validTests) : 0;
       const maxT1 = session.maxT1 || 20;
       const pct = Number(((best / maxT1) * 100).toFixed(2));
@@ -186,7 +203,12 @@ export async function renderMarksEntry(container) {
       const scaledBest = maxT1 === 20 ? best : (best / maxT1) * 20;
       let total = 0;
 
-      if (session.totalFormula === 'BEST_PLUS_TA' || session.totalFormula === 'opt2') {
+      if (session.totalFormula === 'BEST_ENHANCED_PLUS_TA' || session.totalFormula === 'opt5') {
+        const scaledIE = maxIE === 10 ? ie : (ie / maxIE) * 10;
+        const scaledTA = maxTA === 10 ? ta : (ta / maxTA) * 10;
+        const enhancedBest = Math.min(20, scaledBest + scaledIE);
+        total = enhancedBest + scaledTA;
+      } else if (session.totalFormula === 'BEST_PLUS_TA' || session.totalFormula === 'opt2') {
         const scaledTA = maxTA === 10 ? ta : (ta / maxTA) * 10;
         total = scaledBest + scaledTA;
       } else if (session.totalFormula === 'AVG_PLUS_IE_PLUS_TA' || session.totalFormula === 'opt3') {
@@ -208,7 +230,7 @@ export async function renderMarksEntry(container) {
         const scaledTA = maxTA === 5 ? ta : (ta / maxTA) * 5;
         total = scaledBest + scaledIE + scaledTA;
       }
-      total = Number(Math.max(0, Math.min(30, total)).toFixed(2));
+      total = Math.round(Math.max(0, Math.min(30, total)));
 
       // Classification
       let tier = 'AVERAGE';
@@ -221,8 +243,8 @@ export async function renderMarksEntry(container) {
         tierClass = 'badge-fast';
       }
 
-      row.querySelector('.cell-best').textContent = validTests.length > 0 ? best : '-';
-      row.querySelector('.cell-pct').textContent = validTests.length > 0 ? pct + '%' : '-';
+      row.querySelector('.cell-best').textContent = validTests.length > 0 ? Math.round(best) : '-';
+      row.querySelector('.cell-pct').textContent = validTests.length > 0 ? Math.round(pct) + '%' : '-';
       row.querySelector('.cell-sessional').textContent = total;
       row.querySelector('.cell-tier').innerHTML = `
         <span class="inline-block px-2.5 py-0.5 rounded text-[11px] font-bold ${tierClass}">
@@ -255,6 +277,7 @@ export async function renderMarksEntry(container) {
           const t1 = row.querySelector('.mark-t1').value.trim();
           const t2 = row.querySelector('.mark-t2').value.trim();
           const quizAvg = row.querySelector('.mark-quiz').value.trim();
+          const putMarks = row.querySelector('.mark-put').value.trim();
           const ieScore = row.querySelector('.mark-ie').value.trim();
           const taScore = row.querySelector('.mark-ta').value.trim();
 
@@ -263,23 +286,39 @@ export async function renderMarksEntry(container) {
             t1: t1 || null,
             t2: t2 || null,
             quizAvg: quizAvg || null,
+            putMarks: putMarks || null,
             ieScore: ieScore || null,
             taScore: taScore || null
           });
         });
 
         await api.saveBatchMarks(session.id, updates);
-        statusIndicator.textContent = 'All changes saved & calculated!';
+
+        saveBtn.classList.remove('bg-primary');
+        saveBtn.classList.add('bg-emerald-700');
+        saveBtn.innerHTML = `
+          <span class="material-symbols-outlined text-emerald-300 text-[18px]">check_circle</span>
+          <span>Saved!</span>
+        `;
+
+        statusIndicator.textContent = '✓ All changes saved & calculated!';
         statusIndicator.classList.remove('hidden', 'text-slate-500');
         statusIndicator.classList.add('text-emerald-600', 'font-bold');
 
         setTimeout(() => {
+          saveBtn.classList.remove('bg-emerald-700');
+          saveBtn.classList.add('bg-primary');
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = `
+            <span class="material-symbols-outlined text-amber-400 text-[18px]">save</span>
+            <span>Save Changes</span>
+          `;
           statusIndicator.classList.add('hidden');
           statusIndicator.classList.remove('text-emerald-600', 'font-bold');
-        }, 3000);
+        }, 1200);
+        return;
       } catch (err) {
         alert(`Failed to save marks: ${err.message}`);
-      } finally {
         saveBtn.disabled = false;
         saveBtn.innerHTML = `
           <span class="material-symbols-outlined text-amber-400 text-[18px]">save</span>

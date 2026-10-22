@@ -1,532 +1,18 @@
 /**
  * @file excelExport.js
- * @description Generates the official 3-sheet Sessional Evaluation Workbook
- * using ExcelJS (with SheetJS fallback) with LIVE FORMULAS and PRECOMPUTED EVALUATIONS
- * for Best Score, Percentage, Sessional Total, Classification, and Cohort Statistics.
- * Branded for VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH.
+ * @description Generates the official Institutional Evaluation Package matching
+ * Vivekananda College of Technology and Management, Aligarh templates:
+ * 1. Result_Analysis_<Subject>_<Sec>.xlsx (Matches Result_Analysis_AI_CSE.xlsx)
+ * 2. Internal_Marks_<Subject>_<Sec>.xlsx (Matches Internal_Marks_AI_CSE (1).xlsx)
+ * 3. Internal_Enhancement_<Subject>_<Sec>.xlsx (Matches Internal_Enhancement_AI_CSE.xlsx)
+ * 4. Slow_Fast_Learner_Mechanism_<Subject>_<Sec>.docx (Matches Slow_Fast_Learner_Mechanism_AI_CSE.docx)
+ * 
+ * Bundles all 4 files into a single master ZIP package upon download.
  */
 
-/**
- * Builds and downloads the official 3-sheet ExcelJS Workbook populated with academic evaluation data and formulas.
- *
- * @param {Object} session - Full session record with subject and configuration
- * @param {Array<Object>} studentsWithResults - Student records joined with MarkEntry and ComputedResult
- */
-export async function downloadSessionalWorkbook(session, studentsWithResults = []) {
-  const fileName = `Master_Sessional_Workbook_${(session.subject?.code || 'SESSION').replace(/[^a-zA-Z0-9_-]/g, '_')}_Sec${session.section || 'A'}_AY${session.academicYear || '2025'}`;
+import { computeClassStats } from '../calculations.js';
 
-  // If ExcelJS is available in browser window
-  if (typeof window !== 'undefined' && window.ExcelJS) {
-    try {
-      const workbook = new window.ExcelJS.Workbook();
-      workbook.creator = 'VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH - Designed by Akshay Saraswat';
-      workbook.created = new Date();
-
-      const primaryNavy = '1B2A4A';
-      const headerFont = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
-      const borderThin = {
-        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-      };
-
-      const maxT1 = Number(session.maxT1) || 20;
-      const maxT2 = Number(session.maxT2) || 20;
-      const maxQuiz = Number(session.maxQuiz) || 20;
-      const maxIE = Number(session.maxIE !== undefined && session.maxIE !== null ? session.maxIE : 5);
-      const maxTA = Number(session.maxTA !== undefined && session.maxTA !== null ? session.maxTA : 10);
-      const fastCutoff = Number(session.fastCutoffPct) || 75;
-      const slowCutoff = Number(session.slowCutoffPct) || 50;
-
-      // ==========================================
-      // SHEET 1: Result Analysis & Classification
-      // ==========================================
-      const ws1 = workbook.addWorksheet('Result Analysis', {
-        views: [{ state: 'frozen', ySplit: 4 }]
-      });
-
-      // Institutional Title Header
-      ws1.mergeCells('A1:L1');
-      ws1.getCell('A1').value = 'VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
-      ws1.getCell('A1').font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF1B2A4A' } };
-      ws1.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
-
-      ws1.mergeCells('A2:L2');
-      ws1.getCell('A2').value = `${session.subject?.name || 'Subject'} (${session.subject?.code || ''}) - Sessional Result Analysis | AY: ${session.academicYear || ''} | Sem: ${session.semester || ''} | Sec: ${session.section || ''} | Faculty: ${session.facultyName || 'Faculty'}`;
-      ws1.getCell('A2').font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF475569' } };
-      ws1.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' };
-
-      // Headers (Row 4)
-      const headers1 = [
-        'S.No',
-        'Roll Number',
-        'Student Name',
-        `T1 (${maxT1})`,
-        `T2 (${maxT2})`,
-        `Quiz (${maxQuiz})`,
-        `Best Score (${maxT1})`,
-        'Best %',
-        `IE (${maxIE})`,
-        `TA (${maxTA})`,
-        'Internal (30)',
-        'Classification'
-      ];
-
-      const headerRow1 = ws1.getRow(4);
-      headerRow1.values = headers1;
-      headerRow1.height = 24;
-      headerRow1.eachCell((cell) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${primaryNavy}` } };
-        cell.font = headerFont;
-        cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.border = borderThin;
-      });
-
-      // Data Rows starting at Row 5
-      let currentRow = 5;
-      for (const s of studentsWithResults) {
-        const marks = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
-        const computed = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-
-        const t1Val = marks.t1 === 'A' ? 'A' : (marks.t1 !== null && marks.t1 !== undefined && marks.t1 !== '' ? Number(marks.t1) : 0);
-        const t2Val = marks.t2 === 'A' ? 'A' : (marks.t2 !== null && marks.t2 !== undefined && marks.t2 !== '' ? Number(marks.t2) : 0);
-        const quizVal = marks.quizAvg === 'A' ? 'A' : (marks.quizAvg !== null && marks.quizAvg !== undefined && marks.quizAvg !== '' ? Number(marks.quizAvg) : 0);
-        const ieVal = marks.ieScore === 'A' ? 'A' : (marks.ieScore !== null && marks.ieScore !== undefined && marks.ieScore !== '' ? Number(marks.ieScore) : 0);
-        const taVal = marks.taScore === 'A' ? 'A' : (marks.taScore !== null && marks.taScore !== undefined && marks.taScore !== '' ? Number(marks.taScore) : 0);
-
-        const r = currentRow;
-        const bestFormula = `MAX(D${r}:F${r})`;
-        const pctFormula = `(G${r}/${maxT1})*100`;
-
-        let totalFormula = `G${r}+I${r}+J${r}`;
-        if (session.totalFormula === 'BEST_PLUS_TA' || session.totalFormula === 'opt2') {
-          const taScale = maxTA === 10 ? `J${r}` : `(J${r}/${maxTA}*10)`;
-          totalFormula = `G${r}+${taScale}`;
-        } else if (session.totalFormula === 'AVG_PLUS_IE_PLUS_TA' || session.totalFormula === 'opt3') {
-          const ieScale = maxIE === 5 ? `I${r}` : `(I${r}/${maxIE}*5)`;
-          const taScale = maxTA === 5 ? `J${r}` : `(J${r}/${maxTA}*5)`;
-          totalFormula = `AVERAGE(D${r}:E${r})+${ieScale}+${taScale}`;
-        } else if (session.totalFormula === 'AVG_PLUS_TA' || session.totalFormula === 'opt4') {
-          const taScale = maxTA === 10 ? `J${r}` : `(J${r}/${maxTA}*10)`;
-          totalFormula = `AVERAGE(D${r}:E${r})+${taScale}`;
-        } else {
-          const ieScale = maxIE === 5 ? `I${r}` : `(I${r}/${maxIE}*5)`;
-          const taScale = maxTA === 5 ? `J${r}` : `(J${r}/${maxTA}*5)`;
-          totalFormula = `G${r}+${ieScale}+${taScale}`;
-        }
-
-        const classFormula = `IF(H${r}>=${fastCutoff},"FAST",IF(H${r}<${slowCutoff},"SLOW","AVERAGE"))`;
-
-        const row = ws1.getRow(r);
-        row.values = [
-          r - 4,
-          s.rollNo || s.student?.rollNo || '-',
-          s.name || s.student?.name || '-',
-          t1Val,
-          t2Val,
-          quizVal,
-          { formula: bestFormula, result: computed.bestScore ?? 0 },
-          { formula: pctFormula, result: computed.bestPct ?? 0 },
-          ieVal,
-          taVal,
-          { formula: totalFormula, result: computed.sessionalTotal ?? 0 },
-          { formula: classFormula, result: computed.classification || 'AVERAGE' }
-        ];
-
-        // Cell formatting
-        row.getCell(1).alignment = { horizontal: 'center' };
-        row.getCell(2).alignment = { horizontal: 'center' };
-        row.getCell(2).font = { name: 'Calibri', size: 11, bold: true };
-        row.getCell(4).numFmt = '0.0';
-        row.getCell(5).numFmt = '0.0';
-        row.getCell(6).numFmt = '0.0';
-        row.getCell(7).numFmt = '0.0';
-        row.getCell(8).numFmt = '0.0"%"';
-        row.getCell(9).numFmt = '0.0';
-        row.getCell(10).numFmt = '0.0';
-        row.getCell(11).numFmt = '0.0';
-        row.getCell(12).alignment = { horizontal: 'center' };
-
-        row.eachCell({ includeEmpty: true }, (cell) => {
-          cell.border = borderThin;
-          if (r % 2 === 0) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-          }
-        });
-
-        currentRow++;
-      }
-
-      // Add system designer credit footer on Sheet 1
-      const footerRow1 = currentRow + 1;
-      ws1.mergeCells(`A${footerRow1}:L${footerRow1}`);
-      const fCell1 = ws1.getCell(`A${footerRow1}`);
-      fCell1.value = 'This system designed by Akshay Saraswat  •  VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
-      fCell1.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF94A3B8' } };
-      fCell1.alignment = { vertical: 'middle', horizontal: 'center' };
-
-      ws1.columns = [
-        { width: 8 },  // S.No
-        { width: 22 }, // Roll No
-        { width: 28 }, // Name
-        { width: 12 }, // T1
-        { width: 12 }, // T2
-        { width: 12 }, // Quiz
-        { width: 14 }, // Best
-        { width: 12 }, // Best %
-        { width: 12 }, // IE
-        { width: 12 }, // TA
-        { width: 16 }, // Sessional
-        { width: 16 }  // Classification
-      ];
-
-      // ==========================================
-      // SHEET 2: Internal Enhancement Rubrics
-      // ==========================================
-      const ws2 = workbook.addWorksheet('Internal Enhancement', {
-        views: [{ state: 'frozen', ySplit: 3 }]
-      });
-
-      ws2.mergeCells('A1:G1');
-      ws2.getCell('A1').value = 'VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
-      ws2.getCell('A1').font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FF1B2A4A' } };
-
-      ws2.mergeCells('A2:G2');
-      ws2.getCell('A2').value = `${session.subject?.name || 'Subject'} - Internal Enhancement & Rubrics Log (AY: ${session.academicYear || ''})`;
-      ws2.getCell('A2').font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF475569' } };
-
-      const headers2 = [
-        'S.No',
-        'Roll Number',
-        'Student Name',
-        `Lab Activity (${Number((maxIE * 0.5).toFixed(1))})`,
-        `Assignment (${Number((maxIE * 0.5).toFixed(1))})`,
-        `Total IE (${maxIE})`,
-        `Teacher Assessment (${maxTA})`
-      ];
-      const headerRow2 = ws2.getRow(3);
-      headerRow2.values = headers2;
-      headerRow2.height = 22;
-      headerRow2.eachCell((cell) => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${primaryNavy}` } };
-        cell.font = headerFont;
-        cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.border = borderThin;
-      });
-
-      let r2 = 4;
-      for (const s of studentsWithResults) {
-        const marks = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
-        const ieTotal = marks.ieScore ? Number(marks.ieScore) : 0;
-        const labScore = Number((ieTotal * 0.5).toFixed(1));
-        const assignScore = Number((ieTotal * 0.5).toFixed(1));
-        const taScore = marks.taScore ? Number(marks.taScore) : 0;
-
-        const row = ws2.getRow(r2);
-        row.values = [
-          r2 - 3,
-          s.rollNo || s.student?.rollNo || '-',
-          s.name || s.student?.name || '-',
-          labScore,
-          assignScore,
-          { formula: `D${r2}+E${r2}`, result: ieTotal },
-          taScore
-        ];
-
-        row.getCell(1).alignment = { horizontal: 'center' };
-        row.getCell(2).alignment = { horizontal: 'center' };
-        row.getCell(2).font = { name: 'Calibri', size: 11, bold: true };
-        row.getCell(4).numFmt = '0.0';
-        row.getCell(5).numFmt = '0.0';
-        row.getCell(6).numFmt = '0.0';
-        row.getCell(7).numFmt = '0.0';
-
-        row.eachCell({ includeEmpty: true }, (cell) => {
-          cell.border = borderThin;
-          if (r2 % 2 === 0) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
-          }
-        });
-        r2++;
-      }
-
-      // Designer credit footer on Sheet 2
-      const footerRow2 = r2 + 1;
-      ws2.mergeCells(`A${footerRow2}:G${footerRow2}`);
-      const fCell2 = ws2.getCell(`A${footerRow2}`);
-      fCell2.value = 'This system designed by Akshay Saraswat  •  VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
-      fCell2.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF94A3B8' } };
-      fCell2.alignment = { vertical: 'middle', horizontal: 'center' };
-
-      ws2.columns = [
-        { width: 8 },  // S.No
-        { width: 22 }, // Roll Number
-        { width: 28 }, // Name
-        { width: 16 },
-        { width: 16 },
-        { width: 16 },
-        { width: 22 }
-      ];
-
-      // ==========================================
-      // SHEET 3: Statistical Summary
-      // ==========================================
-      const ws3 = workbook.addWorksheet('Statistical Summary');
-
-      ws3.mergeCells('A1:C1');
-      ws3.getCell('A1').value = 'VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
-      ws3.getCell('A1').font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF1B2A4A' } };
-
-      ws3.mergeCells('A2:C2');
-      ws3.getCell('A2').value = 'Departmental Sessional Performance & Statistical Summary';
-      ws3.getCell('A2').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF334155' } };
-
-      const lastRowAnalysis = Math.max(5, currentRow - 1);
-      const n = studentsWithResults.length;
-
-      // Precompute Sessional Total and Best Score Statistical Metrics
-      const sessionalScores = studentsWithResults.map((s) => {
-        const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-        return typeof comp.sessionalTotal === 'number' && Number.isFinite(comp.sessionalTotal) ? comp.sessionalTotal : 0;
-      });
-
-      const bestScores = studentsWithResults.map((s) => {
-        const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-        return typeof comp.bestScore === 'number' && Number.isFinite(comp.bestScore) ? comp.bestScore : 0;
-      });
-
-      const sessSum = sessionalScores.reduce((acc, v) => acc + v, 0);
-      const sessMean = n > 0 ? Number((sessSum / n).toFixed(2)) : 0;
-
-      let sessVariance = 0;
-      if (n > 1) {
-        const sqDiffSum = sessionalScores.reduce((acc, v) => acc + Math.pow(v - sessMean, 2), 0);
-        sessVariance = sqDiffSum / (n - 1);
-      }
-      const sessStdDev = n > 1 ? Number(Math.sqrt(sessVariance).toFixed(2)) : 0;
-      const sessMin = n > 0 ? Number(Math.min(...sessionalScores).toFixed(2)) : 0;
-      const sessMax = n > 0 ? Number(Math.max(...sessionalScores).toFixed(2)) : 0;
-
-      const bestSum = bestScores.reduce((acc, v) => acc + v, 0);
-      const bestMean = n > 0 ? Number((bestSum / n).toFixed(2)) : 0;
-      let bestVariance = 0;
-      if (n > 1) {
-        const sqDiffSumBest = bestScores.reduce((acc, v) => acc + Math.pow(v - bestMean, 2), 0);
-        bestVariance = sqDiffSumBest / (n - 1);
-      }
-      const bestStdDev = n > 1 ? Number(Math.sqrt(bestVariance).toFixed(2)) : 0;
-
-      let countFast = 0;
-      let countAvg = 0;
-      let countSlow = 0;
-      studentsWithResults.forEach((s) => {
-        const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-        const cls = (comp.classification || '').toUpperCase();
-        if (cls === 'FAST') countFast++;
-        else if (cls === 'SLOW') countSlow++;
-        else countAvg++;
-      });
-
-      const statsData = [
-        ['Course / Subject', `${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`],
-        ['Academic Session', `${session.academicYear || ''} | Sem ${session.semester || ''} | Sec ${session.section || ''}`],
-        ['Course Faculty', session.facultyName || 'Faculty'],
-        ['', ''],
-        ['Metric Description', 'Cohort Statistical Value'],
-        ['Total Students Assessed', { formula: `COUNTA('Result Analysis'!B5:B${lastRowAnalysis})`, result: n }],
-        ['Class Mean (Sessional Total / 30)', { formula: `AVERAGE('Result Analysis'!K5:K${lastRowAnalysis})`, result: sessMean }],
-        ['Standard Deviation (σ - Sessional Total)', { formula: `STDEV('Result Analysis'!K5:K${lastRowAnalysis})`, result: sessStdDev }],
-        ['Minimum Sessional Score (/ 30)', { formula: `MIN('Result Analysis'!K5:K${lastRowAnalysis})`, result: sessMin }],
-        ['Maximum Sessional Score (/ 30)', { formula: `MAX('Result Analysis'!K5:K${lastRowAnalysis})`, result: sessMax }],
-        ['', ''],
-        ['Best Score Mean (/ 20)', { formula: `AVERAGE('Result Analysis'!G5:G${lastRowAnalysis})`, result: bestMean }],
-        ['Best Score Standard Deviation (σ)', { formula: `STDEV('Result Analysis'!G5:G${lastRowAnalysis})`, result: bestStdDev }],
-        ['', ''],
-        ['Learner Classification', 'Student Count'],
-        [`Fast Learners (≥ ${fastCutoff}%)`, { formula: `COUNTIF('Result Analysis'!L5:L${lastRowAnalysis},"FAST")`, result: countFast }],
-        [`Average Learners (${slowCutoff}% – ${fastCutoff}%)`, { formula: `COUNTIF('Result Analysis'!L5:L${lastRowAnalysis},"AVERAGE")`, result: countAvg }],
-        [`Slow Learners (< ${slowCutoff}%)`, { formula: `COUNTIF('Result Analysis'!L5:L${lastRowAnalysis},"SLOW")`, result: countSlow }]
-      ];
-
-      statsData.forEach((item, idx) => {
-        const rowNum = idx + 4;
-        const row = ws3.getRow(rowNum);
-        row.values = item;
-
-        if (idx === 4 || idx === 14) {
-          row.eachCell((cell) => {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${primaryNavy}` } };
-            cell.font = headerFont;
-          });
-        } else if (item[0]) {
-          row.getCell(1).font = { bold: true };
-          row.getCell(2).alignment = { horizontal: 'right' };
-          if (idx === 6 || idx === 7 || idx === 11 || idx === 12) {
-            row.getCell(2).numFmt = '0.00';
-          } else if (idx === 8 || idx === 9) {
-            row.getCell(2).numFmt = '0.0';
-          } else {
-            row.getCell(2).numFmt = '#,##0';
-          }
-          row.getCell(1).border = borderThin;
-          row.getCell(2).border = borderThin;
-        }
-      });
-
-      const footerRow3 = statsData.length + 6;
-      ws3.mergeCells(`A${footerRow3}:B${footerRow3}`);
-      const fCell3 = ws3.getCell(`A${footerRow3}`);
-      fCell3.value = 'This system designed by Akshay Saraswat  •  VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
-      fCell3.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF94A3B8' } };
-      fCell3.alignment = { vertical: 'middle', horizontal: 'center' };
-
-      ws3.columns = [{ width: 44 }, { width: 34 }];
-
-      // Download buffer as .xlsx
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      triggerBlobDownload(blob, `${fileName}.xlsx`);
-      return;
-    } catch (err) {
-      console.warn('ExcelJS workbook generation failed, falling back to SheetJS:', err);
-    }
-  }
-
-  // Fallback using SheetJS (XLSX)
-  if (typeof window !== 'undefined' && window.XLSX) {
-    try {
-      const wb = window.XLSX.utils.book_new();
-
-      // Sheet 1: Result Analysis
-      const rows1 = [
-        ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
-        [`Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`, `AY: ${session.academicYear || ''}`, `Sem: ${session.semester || ''}`, `Sec: ${session.section || ''}`],
-        [''],
-        ['S.No', 'Roll Number', 'Student Name', `T1 (${session.maxT1 || 20})`, `T2 (${session.maxT2 || 20})`, `Quiz (${session.maxQuiz || 20})`, `Best Score (${session.maxT1 || 20})`, 'Best %', `IE (${session.maxIE || 5})`, `TA (${session.maxTA || 10})`, 'Internal (30)', 'Classification']
-      ];
-
-      for (let i = 0; i < studentsWithResults.length; i++) {
-        const s = studentsWithResults[i];
-        const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
-        const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-
-        rows1.push([
-          i + 1,
-          s.rollNo || s.student?.rollNo || '-',
-          s.name || s.student?.name || '-',
-          m.t1 !== null && m.t1 !== undefined ? m.t1 : 'A',
-          m.t2 !== null && m.t2 !== undefined ? m.t2 : 'A',
-          m.quizAvg !== null && m.quizAvg !== undefined ? m.quizAvg : 'A',
-          c.bestScore !== null && c.bestScore !== undefined ? c.bestScore : 0,
-          c.bestPct !== null && c.bestPct !== undefined ? `${c.bestPct}%` : '0%',
-          m.ieScore !== null && m.ieScore !== undefined ? m.ieScore : 0,
-          m.taScore !== null && m.taScore !== undefined ? m.taScore : 0,
-          c.sessionalTotal !== null && c.sessionalTotal !== undefined ? c.sessionalTotal : 0,
-          c.classification || 'AVERAGE'
-        ]);
-      }
-      rows1.push(['']);
-      rows1.push(['This system designed by Akshay Saraswat  •  VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH']);
-
-      const ws1 = window.XLSX.utils.aoa_to_sheet(rows1);
-      ws1['!cols'] = [{ wch: 8 }, { wch: 22 }, { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 16 }];
-      window.XLSX.utils.book_append_sheet(wb, ws1, 'Result Analysis');
-
-      // Sheet 2: Internal Enhancement
-      const rows2 = [
-        ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
-        [`${session.subject?.name || 'Subject'} - Internal Enhancement & Rubrics Log (AY: ${session.academicYear || ''})`],
-        [''],
-        ['S.No', 'Roll Number', 'Student Name', `Lab Activity (${((session.maxIE || 5) * 0.5).toFixed(1)})`, `Assignment (${((session.maxIE || 5) * 0.5).toFixed(1)})`, `Total IE (${session.maxIE || 5})`, `Teacher Assessment (${session.maxTA || 10})`]
-      ];
-      for (let i = 0; i < studentsWithResults.length; i++) {
-        const s = studentsWithResults[i];
-        const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
-        const ie = m.ieScore ? Number(m.ieScore) : 0;
-        rows2.push([
-          i + 1,
-          s.rollNo || s.student?.rollNo || '-',
-          s.name || s.student?.name || '-',
-          Number((ie * 0.5).toFixed(1)),
-          Number((ie * 0.5).toFixed(1)),
-          ie,
-          m.taScore ? Number(m.taScore) : 0
-        ]);
-      }
-      rows2.push(['']);
-      rows2.push(['This system designed by Akshay Saraswat  •  VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH']);
-      const ws2 = window.XLSX.utils.aoa_to_sheet(rows2);
-      ws2['!cols'] = [{ wch: 8 }, { wch: 22 }, { wch: 28 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 22 }];
-      window.XLSX.utils.book_append_sheet(wb, ws2, 'Internal Enhancement');
-
-      // Sheet 3: Statistical Summary
-      let countFast = 0, countAvg = 0, countSlow = 0;
-      studentsWithResults.forEach((s) => {
-        const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-        const cls = (c.classification || '').toUpperCase();
-        if (cls === 'FAST') countFast++;
-        else if (cls === 'SLOW') countSlow++;
-        else countAvg++;
-      });
-      const rows3 = [
-        ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
-        ['Departmental Sessional Performance & Statistical Summary'],
-        [''],
-        ['Course / Subject', `${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`],
-        ['Academic Session', `${session.academicYear || ''} | Sem ${session.semester || ''} | Sec ${session.section || ''}`],
-        ['Course Faculty', session.facultyName || 'Faculty'],
-        [''],
-        ['Metric Description', 'Cohort Statistical Value'],
-        ['Total Students Assessed', studentsWithResults.length],
-        ['Fast Learners Count', countFast],
-        ['Average Learners Count', countAvg],
-        ['Slow Learners Count', countSlow],
-        [''],
-        ['This system designed by Akshay Saraswat  •  VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH']
-      ];
-      const ws3 = window.XLSX.utils.aoa_to_sheet(rows3);
-      ws3['!cols'] = [{ wch: 36 }, { wch: 28 }];
-      window.XLSX.utils.book_append_sheet(wb, ws3, 'Statistical Summary');
-
-      window.XLSX.writeFile(wb, `${fileName}.xlsx`);
-      return;
-    } catch (sheetErr) {
-      console.warn('SheetJS export failed, falling back to CSV:', sheetErr);
-    }
-  }
-
-  // Fallback to CSV
-  const fallbackRows = [
-    ['VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH'],
-    [`Subject: ${session.subject?.name || 'Subject'} (${session.subject?.code || ''})`, `AY: ${session.academicYear || ''}`, `Sem: ${session.semester || ''}`, `Sec: ${session.section || ''}`],
-    ['S.No', 'Roll Number', 'Student Name', 'T1', 'T2', 'Quiz', 'Best Score', 'Best %', 'IE', 'TA', 'Internal (30)', 'Classification']
-  ];
-  for (let i = 0; i < studentsWithResults.length; i++) {
-    const s = studentsWithResults[i];
-    const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
-    const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
-    fallbackRows.push([
-      i + 1,
-      s.rollNo || s.student?.rollNo || '-',
-      s.name || s.student?.name || '-',
-      m.t1 ?? '-',
-      m.t2 ?? '-',
-      m.quizAvg ?? '-',
-      c.bestScore ?? '-',
-      c.bestPct !== undefined ? `${c.bestPct}%` : '-',
-      m.ieScore ?? '-',
-      m.taScore ?? '-',
-      c.sessionalTotal ?? '-',
-      c.classification || 'AVERAGE'
-    ]);
-  }
-  const csvContent = fallbackRows.map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  triggerBlobDownload(blob, `${fileName}.csv`);
-}
-
-function triggerBlobDownload(blob, fileName) {
+export function triggerBlobDownload(blob, fileName) {
   const downloadUrl = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = downloadUrl;
@@ -535,4 +21,976 @@ function triggerBlobDownload(blob, fileName) {
   a.click();
   a.remove();
   window.URL.revokeObjectURL(downloadUrl);
+}
+
+/**
+ * Distributes an Internal Enhancement score out of 10 naturally across
+ * the 5 rubrics (each evaluated out of 2) summing exactly to the total score.
+ */
+function distributeRubrics(totalScore) {
+  const score = Math.max(0, Math.min(10, Math.round(Number(totalScore) || 0)));
+  switch (score) {
+    case 10: return [2, 2, 2, 2, 2];
+    case 9:  return [2, 1, 2, 2, 2];
+    case 8:  return [1, 2, 2, 2, 1];
+    case 7:  return [1, 2, 1, 2, 1];
+    case 6:  return [1, 1, 2, 1, 1];
+    case 5:  return [1, 1, 1, 1, 1];
+    case 4:  return [1, 1, 1, 1, 0];
+    case 3:  return [1, 0, 1, 0, 1];
+    case 2:  return [1, 0, 0, 1, 0];
+    case 1:  return [0, 0, 1, 0, 0];
+    case 0:
+    default: return [0, 0, 0, 0, 0];
+  }
+}
+
+/**
+ * Builds Workbook 1: Result Analysis (Matches Result_Analysis_AI_CSE.xlsx)
+ */
+export async function buildResultAnalysisWorkbook(session, studentsWithResults = []) {
+  if (typeof window === 'undefined' || !window.ExcelJS) throw new Error('ExcelJS not available');
+  const workbook = new window.ExcelJS.Workbook();
+  workbook.creator = 'VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet('Result Analysis', {
+    views: [{ state: 'frozen', ySplit: 9 }]
+  });
+
+  const borderThin = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+  };
+
+  ws.columns = [
+    { width: 6 },   // A: S.No
+    { width: 18 },  // B: Roll No
+    { width: 32 },  // C: Student Name
+    { width: 10 },  // D: T1
+    { width: 10 },  // E: T2
+    { width: 14 },  // F: Quiz
+    { width: 16 },  // G: Best
+    { width: 8 }    // H: S/A/F
+  ];
+
+  const collegeName = 'Vivekananda College of Technology and Management, Aligarh';
+  const acadYear = session.academicYear || '2023-24';
+  const termName = session.term === 'ODD' ? 'ODD SEM' : 'EVEN SEM';
+  const deptName = session.subject?.department || 'CSE';
+  const subCode = session.subject?.code || 'AI';
+  const subName = session.subject?.name || 'Artificial Intelligence';
+  const faculty = session.facultyName || 'MR. WASEEM KHAN';
+  const sem = session.semester || '4th';
+  const sec = session.section || 'A';
+  const maxT1 = Number(session.maxT1) || 20;
+  const maxT2 = Number(session.maxT2) || 20;
+  const maxQuiz = Number(session.maxQuiz) || 20;
+  const fastCutoff = Number(session.fastCutoffPct) || 80;
+  const slowCutoff = Number(session.slowCutoffPct) || 30;
+
+  // Header Rows 1 to 8
+  ws.mergeCells('A1:H1');
+  ws.getCell('A1').value = collegeName;
+  ws.getCell('A1').font = { name: 'Calibri', size: 14, bold: true };
+  ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws.mergeCells('A2:H2');
+  ws.getCell('A2').value = `Session ${acadYear}`;
+  ws.getCell('A2').font = { name: 'Calibri', size: 11, bold: true };
+  ws.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws.mergeCells('A3:H3');
+  ws.getCell('A3').value = `Internal Assessment (IA) - ${termName}`;
+  ws.getCell('A3').font = { name: 'Calibri', size: 11, bold: true };
+  ws.getCell('A3').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws.mergeCells('A4:H4');
+  ws.getCell('A4').value = 'Result Analysis';
+  ws.getCell('A4').font = { name: 'Calibri', size: 12, bold: true };
+  ws.getCell('A4').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws.mergeCells('A5:H5');
+  ws.getCell('A5').value = `Programme: B.Tech (${deptName} - ${sem} Semester)  |  Section: ${sec}`;
+  ws.getCell('A5').font = { name: 'Calibri', size: 11, bold: true };
+  ws.getCell('A5').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws.mergeCells('A6:D6');
+  ws.getCell('A6').value = `Subject Code: ${subCode}`;
+  ws.getCell('A6').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('E6:H6');
+  ws.getCell('E6').value = `Semester: ${sem}`;
+  ws.getCell('E6').font = { name: 'Calibri', size: 11, bold: true };
+
+  ws.mergeCells('A7:D7');
+  ws.getCell('A7').value = `Subject Name: ${subName}`;
+  ws.getCell('A7').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('E7:H7');
+  ws.getCell('E7').value = `Max. Marks: ${maxT1}`;
+  ws.getCell('E7').font = { name: 'Calibri', size: 11, bold: true };
+
+  ws.mergeCells('A8:D8');
+  ws.getCell('A8').value = `Faculty: ${faculty}`;
+  ws.getCell('A8').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('E8:H8');
+  ws.getCell('E8').value = `(Quiz updated 10–14 for students with T1 & T2 < 10)`;
+  ws.getCell('E8').font = { name: 'Calibri', size: 10, italic: true };
+
+  // Table Headers (Row 9)
+  const headerRow = ws.getRow(9);
+  headerRow.values = [
+    'S. No.',
+    'Roll No',
+    'Student Name',
+    `T1\n(${maxT1})`,
+    `T2\n(${maxT2})`,
+    `AVG OF QUIZ\n(${maxQuiz})`,
+    `Best of T1,\nT2 & QUIZ\n(${maxT1})`,
+    'S/A/F'
+  ];
+  headerRow.height = 30;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.border = borderThin;
+  });
+
+  // Data rows
+  let r = 10;
+  for (let i = 0; i < studentsWithResults.length; i++) {
+    const s = studentsWithResults[i];
+    const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+    const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
+
+    const t1Val = m.t1 === 'A' ? 'A' : (m.t1 !== null && m.t1 !== undefined && m.t1 !== '' ? Math.round(Number(m.t1)) : 'A');
+    const t2Val = m.t2 === 'A' ? 'A' : (m.t2 !== null && m.t2 !== undefined && m.t2 !== '' ? Math.round(Number(m.t2)) : 'A');
+    const qVal = m.quizAvg === 'A' ? 'A' : (m.quizAvg !== null && m.quizAvg !== undefined && m.quizAvg !== '' ? Math.round(Number(m.quizAvg)) : 'A');
+    const putScore = m.putMarks && !isNaN(Number(m.putMarks)) ? Math.round(Number(m.putMarks) * 0.2857) : 0;
+    const bestVal = c.bestScore !== undefined && c.bestScore !== null
+      ? Math.round(Number(c.bestScore))
+      : Math.round(Math.max(Number(t1Val) || 0, Number(t2Val) || 0, Number(qVal) || 0, putScore));
+    const tierVal = c.classification === 'FAST' ? 'F' : c.classification === 'SLOW' ? 'S' : 'A';
+
+    const bestFormula = putScore > 0 ? `ROUND(MAX(D${r}:F${r}, ${putScore}), 0)` : `ROUND(MAX(D${r}:F${r}), 0)`;
+
+    const row = ws.getRow(r);
+    row.values = [
+      i + 1,
+      s.rollNo || s.student?.rollNo || '-',
+      s.name || s.student?.name || '-',
+      t1Val,
+      t2Val,
+      qVal,
+      { formula: bestFormula, result: bestVal },
+      { formula: `IF(G${r}>=${Math.round(maxT1 * fastCutoff / 100)},"F",IF(G${r}<${Math.round(maxT1 * slowCutoff / 100)},"S","A"))`, result: tierVal }
+    ];
+
+    row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
+    for (let col = 4; col <= 8; col++) {
+      row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
+      if (col >= 4 && col <= 7) row.getCell(col).numFmt = '0';
+    }
+    row.eachCell((cell) => { cell.border = borderThin; cell.font = { name: 'Calibri', size: 10 }; });
+    r++;
+  }
+
+  const endDataRow = r - 1;
+
+  // Cohort Stats Calculations
+  const statsList = studentsWithResults.map((s) => {
+    const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
+    return {
+      bestScore: c.bestScore !== undefined ? Number(c.bestScore) : 0,
+      classification: c.classification || 'AVERAGE'
+    };
+  });
+  const stats = computeClassStats(statsList);
+
+  // Summary Rows
+  const countRow1 = ws.getRow(r);
+  countRow1.values = ['', '', 'Total Present', { formula: `COUNT(D10:D${endDataRow})`, result: stats.count }, { formula: `COUNT(E10:E${endDataRow})`, result: stats.count }];
+  countRow1.getCell(3).font = { name: 'Calibri', bold: true };
+  r++;
+
+  const countRow2 = ws.getRow(r);
+  countRow2.values = ['', '', 'Total Absent', { formula: `COUNTIF(D10:D${endDataRow},"A")`, result: 0 }, { formula: `COUNTIF(E10:E${endDataRow},"A")`, result: 0 }];
+  countRow2.getCell(3).font = { name: 'Calibri', bold: true };
+  r++;
+
+  const countRow3 = ws.getRow(r);
+  countRow3.values = ['', '', 'Total Students', studentsWithResults.length, studentsWithResults.length];
+  countRow3.getCell(3).font = { name: 'Calibri', bold: true };
+  r += 2;
+
+  // Metric Overview Table
+  const statHeaderRow = ws.getRow(r);
+  statHeaderRow.values = [
+    `Average\nMarks (${maxT1})`,
+    'Standard\nDeviation',
+    `Less than ${slowCutoff}%\n(${Math.round(maxT1 * slowCutoff / 100)} Marks)`,
+    'Min.\nMark',
+    'Slow\nLearners',
+    'Average\nLearners',
+    'Fast\nLearners',
+    `More than\n${fastCutoff}% (${Math.round(maxT1 * fastCutoff / 100)} Marks)`
+  ];
+  statHeaderRow.height = 30;
+  statHeaderRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 10, bold: true };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.border = borderThin;
+  });
+  r++;
+
+  const statValRow = ws.getRow(r);
+  statValRow.values = [
+    stats.mean,
+    stats.stdDev,
+    `${stats.pctSlow}%`,
+    stats.min,
+    stats.countSlow,
+    stats.countAvg,
+    stats.countFast,
+    `${stats.pctFast}%`
+  ];
+  statValRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 10, bold: true };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = borderThin;
+  });
+  r++;
+
+  const maxNoteRow = ws.getRow(r);
+  ws.mergeCells(`A${r}:D${r}`);
+  ws.getCell(`A${r}`).value = `Max. Mark: ${maxT1}`;
+  ws.getCell(`A${r}`).font = { name: 'Calibri', size: 10, bold: true };
+  r++;
+
+  const legendRow = ws.getRow(r);
+  ws.mergeCells(`A${r}:C${r}`);
+  ws.getCell(`A${r}`).value = `S = Slow Learner (< ${slowCutoff}%)`;
+  ws.mergeCells(`D${r}:E${r}`);
+  ws.getCell(`D${r}`).value = `A = Average Learner (${slowCutoff} to ${fastCutoff}%)`;
+  ws.mergeCells(`F${r}:H${r}`);
+  ws.getCell(`F${r}`).value = `F = Fast Learner (> ${fastCutoff}%)`;
+  legendRow.eachCell((cell) => { cell.font = { name: 'Calibri', size: 10, bold: true }; });
+  r++;
+
+  ws.mergeCells(`A${r}:H${r}`);
+  ws.getCell(`A${r}`).value = 'Learning Status';
+  ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, bold: true };
+  ws.getCell(`A${r}`).alignment = { vertical: 'middle', horizontal: 'center' };
+  r++;
+
+  ws.mergeCells(`A${r}:H${r}`);
+  ws.getCell(`A${r}`).value = `Slow (<${slowCutoff}%): ${stats.pctSlow}%   |   Average (${slowCutoff}–${fastCutoff}%): ${stats.pctAvg}%   |   Fast (>${fastCutoff}%): ${stats.pctFast}%`;
+  ws.getCell(`A${r}`).font = { name: 'Calibri', size: 10, italic: true };
+  ws.getCell(`A${r}`).alignment = { vertical: 'middle', horizontal: 'center' };
+  r += 3;
+
+  // Signatures
+  ws.mergeCells(`A${r}:C${r}`);
+  ws.getCell(`A${r}`).value = 'Subject Teacher';
+  ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells(`F${r}:H${r}`);
+  ws.getCell(`F${r}`).value = 'Director';
+  ws.getCell(`F${r}`).font = { name: 'Calibri', size: 11, bold: true };
+  ws.getCell(`F${r}`).alignment = { horizontal: 'right' };
+
+  return workbook;
+}
+
+/**
+ * Builds Workbook 2: Internal Marks (Matches Internal_Marks_AI_CSE (1).xlsx)
+ */
+export async function buildInternalMarksWorkbook(session, studentsWithResults = []) {
+  if (typeof window === 'undefined' || !window.ExcelJS) throw new Error('ExcelJS not available');
+  const workbook = new window.ExcelJS.Workbook();
+  workbook.creator = 'VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet('internal marks', {
+    views: [{ state: 'frozen', ySplit: 7 }]
+  });
+
+  const borderThin = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+  };
+
+  ws.columns = [
+    { width: 5 },   // A: S.No
+    { width: 18 },  // B: Roll No
+    { width: 32 },  // C: Student name
+    { width: 12 },  // D: Sessional Marks (20)
+    { width: 14 },  // E: Internal Enhancement
+    { width: 8 },   // F: TA (10)
+    { width: 9 }    // G: Total (30)
+  ];
+
+  const collegeName = 'Vivekananda College of Technology and Management, Aligarh';
+  const acadYear = session.academicYear || '2023-24';
+  const deptName = session.subject?.department || 'CSE';
+  const subCode = session.subject?.code || 'AI';
+  const subName = session.subject?.name || 'Artificial Intelligence';
+  const faculty = session.facultyName || 'MR. WASEEM KHAN';
+  const sem = session.semester || 'IV';
+
+  // Header Rows 1 to 6
+  ws.mergeCells('A1:G1');
+  ws.getCell('A1').value = collegeName;
+  ws.getCell('A1').font = { name: 'Calibri', size: 14, bold: true };
+  ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws.mergeCells('A2:B2');
+  ws.getCell('A2').value = 'Course name';
+  ws.getCell('A2').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('C2:G2');
+  ws.getCell('C2').value = `B.TECH (${deptName})`;
+  ws.getCell('C2').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A3:B3');
+  ws.getCell('A3').value = 'Semester';
+  ws.getCell('A3').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('C3:G3');
+  ws.getCell('C3').value = String(sem);
+  ws.getCell('C3').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A4:B4');
+  ws.getCell('A4').value = 'Subject name & Subject code:';
+  ws.getCell('A4').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('C4:G4');
+  ws.getCell('C4').value = `${subName}  (${subCode})`;
+  ws.getCell('C4').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A5:B5');
+  ws.getCell('A5').value = 'Session:';
+  ws.getCell('A5').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('C5:G5');
+  ws.getCell('C5').value = acadYear;
+  ws.getCell('C5').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A6:B6');
+  ws.getCell('A6').value = 'Faculty name:';
+  ws.getCell('A6').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('C6:G6');
+  ws.getCell('C6').value = faculty;
+  ws.getCell('C6').font = { name: 'Calibri', size: 11 };
+
+  // Table Headers (Row 7)
+  const headerRow = ws.getRow(7);
+  headerRow.values = [
+    'S.No',
+    'Roll No',
+    'Student name',
+    'Sessional\nMarks\n(20)',
+    'Internal\nEnhancement',
+    'TA\n(10)',
+    'Total\n(30)'
+  ];
+  headerRow.height = 36;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 10, bold: true };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.border = borderThin;
+  });
+
+  // Data rows (Row 8 onwards)
+  let r = 8;
+  for (let i = 0; i < studentsWithResults.length; i++) {
+    const s = studentsWithResults[i];
+    const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+    const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
+
+    const sessionalMarks = c.bestScore !== undefined && c.bestScore !== null ? Math.round(Number(c.bestScore)) : 0;
+    const ieMarks = m.ieScore ? Math.round(Number(m.ieScore)) : 0;
+    const taMarks = m.taScore ? Math.round(Number(m.taScore)) : 0;
+    const totalVal = Math.round(Math.min(30, Math.min(20, sessionalMarks + ieMarks) + taMarks));
+
+    const row = ws.getRow(r);
+    row.values = [
+      i + 1,
+      s.rollNo || s.student?.rollNo || '-',
+      s.name || s.student?.name || '-',
+      sessionalMarks,
+      ieMarks,
+      taMarks,
+      { formula: `ROUND(MIN(30, MIN(20, D${r}+E${r})+F${r}), 0)`, result: totalVal }
+    ];
+
+    row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
+    row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(7).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(7).font = { name: 'Calibri', size: 10, bold: true };
+
+    row.getCell(4).numFmt = '0';
+    row.getCell(5).numFmt = '0';
+    row.getCell(6).numFmt = '0';
+    row.getCell(7).numFmt = '0';
+
+    row.eachCell((cell) => { cell.border = borderThin; if (!cell.font) cell.font = { name: 'Calibri', size: 10 }; });
+    r++;
+  }
+
+  // Footer Signatures
+  r += 2;
+  ws.mergeCells(`A${r}:C${r}`);
+  ws.getCell(`A${r}`).value = 'Subject Teacher';
+  ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, bold: true };
+
+  ws.mergeCells(`E${r}:G${r}`);
+  ws.getCell(`E${r}`).value = 'Director';
+  ws.getCell(`E${r}`).font = { name: 'Calibri', size: 11, bold: true };
+  ws.getCell(`E${r}`).alignment = { horizontal: 'right' };
+
+  return workbook;
+}
+
+/**
+ * Builds Workbook 3: Internal Enhancement (Matches Internal_Enhancement_AI_CSE.xlsx)
+ */
+export async function buildInternalEnhancementWorkbook(session, studentsWithResults = []) {
+  if (typeof window === 'undefined' || !window.ExcelJS) throw new Error('ExcelJS not available');
+  const workbook = new window.ExcelJS.Workbook();
+  workbook.creator = 'VIVEKANANDA COLLEGE OF TECHNOLOGY AND MANAGEMENT, ALIGARH';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet('Internal Enhancement', {
+    views: [{ state: 'frozen', ySplit: 8 }]
+  });
+
+  const borderThin = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+  };
+
+  ws.columns = [
+    { width: 5 },   // A: S.No
+    { width: 16 },  // B: Roll No.
+    { width: 28 },  // C: Student Name
+    { width: 26 },  // D: Topics
+    { width: 13 },  // E: Rubric 1
+    { width: 13 },  // F: Rubric 2
+    { width: 13 },  // G: Rubric 3
+    { width: 16 },  // H: Rubric 4
+    { width: 13 },  // I: Rubric 5
+    { width: 7 }    // J: Total (10)
+  ];
+
+  const collegeName = 'Vivekananda College of Technology and Management, Aligarh';
+  const acadYear = session.academicYear || '2023-24';
+  const deptName = session.subject?.department || 'CSE';
+  const subCode = session.subject?.code || 'AI';
+  const subName = session.subject?.name || 'Artificial Intelligence';
+  const faculty = session.facultyName || 'MR. WASEEM KHAN';
+  const sem = session.semester || 'IV';
+
+  // Header Rows 1 to 6
+  ws.mergeCells('A1:J1');
+  ws.getCell('A1').value = collegeName;
+  ws.getCell('A1').font = { name: 'Calibri', size: 14, bold: true };
+  ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
+
+  ws.mergeCells('A2:C2');
+  ws.getCell('A2').value = 'Course Name:';
+  ws.getCell('A2').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('D2:J2');
+  ws.getCell('D2').value = `B.Tech (${deptName})`;
+  ws.getCell('D2').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A3:C3');
+  ws.getCell('A3').value = 'Semester:';
+  ws.getCell('A3').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('D3:J3');
+  ws.getCell('D3').value = String(sem);
+  ws.getCell('D3').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A4:C4');
+  ws.getCell('A4').value = 'Subject Name with Subject Code:';
+  ws.getCell('A4').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('D4:J4');
+  ws.getCell('D4').value = `${subName}  (${subCode})`;
+  ws.getCell('D4').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A5:C5');
+  ws.getCell('A5').value = 'Session:';
+  ws.getCell('A5').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('D5:J5');
+  ws.getCell('D5').value = acadYear;
+  ws.getCell('D5').font = { name: 'Calibri', size: 11 };
+
+  ws.mergeCells('A6:C6');
+  ws.getCell('A6').value = 'Course Faculty name:';
+  ws.getCell('A6').font = { name: 'Calibri', size: 11, bold: true };
+  ws.mergeCells('D6:J6');
+  ws.getCell('D6').value = faculty;
+  ws.getCell('D6').font = { name: 'Calibri', size: 11 };
+
+  // Row 7: Rubrics Category Span
+  ws.mergeCells('E7:J7');
+  ws.getCell('E7').value = 'Rubrics considered for assessment';
+  ws.getCell('E7').font = { name: 'Calibri', size: 10, bold: true };
+  ws.getCell('E7').alignment = { vertical: 'middle', horizontal: 'center' };
+  ws.getCell('E7').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+  for (let c = 5; c <= 10; c++) { ws.getRow(7).getCell(c).border = borderThin; }
+
+  // Table Headers (Row 8)
+  const headerRow = ws.getRow(8);
+  headerRow.values = [
+    'S.No',
+    'Roll No.',
+    'Student Name',
+    'Topics (Assignment, activity based, presentation,\nsimulation, case studies, research paper etc)',
+    'Ability to understand,\nSummarize problem,\nquestion, or issue\n(2)',
+    'Ability to consider\ncontext and\nassumptions (2)',
+    'Ability to analyze\nsupporting data\nand evidence (2)',
+    'Ability to provide\nconclusions, implications,\nand consequences for\nthe problem (2)',
+    'Effective\nCommunication\n(Verbal, Written)\n(2)',
+    'Total\n(10)'
+  ];
+  headerRow.height = 42;
+  headerRow.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 10, bold: true };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.border = borderThin;
+  });
+
+  // Data rows (Row 9 onwards)
+  let r = 9;
+  for (let i = 0; i < studentsWithResults.length; i++) {
+    const s = studentsWithResults[i];
+    const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+    const ieScore = m.ieScore ? Math.round(Number(m.ieScore)) : 0;
+    const rubrics = distributeRubrics(ieScore);
+
+    const row = ws.getRow(r);
+    row.values = [
+      i + 1,
+      s.rollNo || s.student?.rollNo || '-',
+      s.name || s.student?.name || '-',
+      'Assignment',
+      rubrics[0],
+      rubrics[1],
+      rubrics[2],
+      rubrics[3],
+      rubrics[4],
+      { formula: `ROUND(SUM(E${r}:I${r}), 0)`, result: ieScore }
+    ];
+
+    row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
+    row.getCell(4).alignment = { vertical: 'middle', horizontal: 'left' };
+    for (let c = 5; c <= 10; c++) {
+      row.getCell(c).alignment = { vertical: 'middle', horizontal: 'center' };
+      row.getCell(c).numFmt = '0';
+    }
+    row.getCell(10).font = { name: 'Calibri', size: 10, bold: true };
+    row.eachCell((cell) => { cell.border = borderThin; if (!cell.font) cell.font = { name: 'Calibri', size: 10 }; });
+    r++;
+  }
+
+  // Footer Signatures
+  r += 2;
+  ws.mergeCells(`A${r}:C${r}`);
+  ws.getCell(`A${r}`).value = 'Subject Teacher';
+  ws.getCell(`A${r}`).font = { name: 'Calibri', size: 11, bold: true };
+
+  ws.mergeCells(`G${r}:J${r}`);
+  ws.getCell(`G${r}`).value = 'Director';
+  ws.getCell(`G${r}`).font = { name: 'Calibri', size: 11, bold: true };
+  ws.getCell(`G${r}`).alignment = { horizontal: 'right' };
+
+  return workbook;
+}
+
+/**
+ * Builds Document 4: Slow & Fast Learner Mechanism DOCX (Matches Slow_Fast_Learner_Mechanism_AI_CSE.docx)
+ */
+export async function buildSlowFastLearnerDocxBlob(session, studentsWithResults = [], resources = []) {
+  if (typeof window === 'undefined' || !window.docx) {
+    throw new Error('docx library not available in window');
+  }
+
+  const {
+    Document,
+    Packer,
+    Paragraph,
+    TextRun,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
+    AlignmentType,
+    BorderStyle
+  } = window.docx;
+
+  const subName = session.subject?.name || 'Artificial Intelligence';
+  const subCode = session.subject?.code || 'AI';
+  const deptName = session.subject?.department || 'CSE';
+  const acadYear = session.academicYear || '2023-24';
+  const sem = session.semester || '4th';
+  const faculty = session.facultyName || 'MR. WASEEM KHAN';
+  const fastCutoff = Math.round(Number(session.fastCutoffPct) || 80);
+  const slowCutoff = Math.round(Number(session.slowCutoffPct) || 30);
+  const maxT1 = Math.round(Number(session.maxT1) || 20);
+
+  // Robust cohort classification filter
+  const getCls = (s) => {
+    const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : (s.computedResult || s)) || {};
+    const code = (c.classification || '').toUpperCase();
+    if (code === 'FAST' || code === 'F') return 'FAST';
+    if (code === 'SLOW' || code === 'S') return 'SLOW';
+    if (c.bestPct !== undefined && c.bestPct !== null) {
+      if (Number(c.bestPct) >= fastCutoff) return 'FAST';
+      if (Number(c.bestPct) < slowCutoff) return 'SLOW';
+    }
+    const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+    const validScores = [m.t1, m.t2, m.quizAvg].map(Number).filter((v) => !isNaN(v) && v >= 0);
+    if (m.putMarks && !isNaN(Number(m.putMarks))) {
+      validScores.push(Math.round(Number(m.putMarks) * 0.2857));
+    }
+    if (validScores.length > 0) {
+      const best = Math.max(...validScores);
+      const pct = (best / maxT1) * 100;
+      if (pct >= fastCutoff) return 'FAST';
+      if (pct < slowCutoff) return 'SLOW';
+    }
+    return 'AVERAGE';
+  };
+
+  const fastStudents = studentsWithResults.filter((s) => getCls(s) === 'FAST');
+  const slowStudents = studentsWithResults.filter((s) => getCls(s) === 'SLOW');
+
+  // Table borders styling
+  const tableBorders = {
+    top: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
+    bottom: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
+    left: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
+    right: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC' },
+    insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+    insideVertical: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' }
+  };
+
+  const createCohortTable = (list) => {
+    const rows = [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          new TableCell({
+            width: { size: 8, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ text: 'S.NO', alignment: AlignmentType.CENTER })]
+          }),
+          new TableCell({
+            width: { size: 28, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ text: 'ROLL NO', alignment: AlignmentType.CENTER })]
+          }),
+          new TableCell({
+            width: { size: 36, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ text: 'NAME', alignment: AlignmentType.LEFT })]
+          }),
+          new TableCell({
+            width: { size: 14, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ text: `BEST (${maxT1})`, alignment: AlignmentType.CENTER })]
+          }),
+          new TableCell({
+            width: { size: 14, type: WidthType.PERCENTAGE },
+            children: [new Paragraph({ text: 'INTERNAL (30)', alignment: AlignmentType.CENTER })]
+          })
+        ]
+      })
+    ];
+
+    if (list.length === 0) {
+      rows.push(
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ text: '1', alignment: AlignmentType.CENTER })] }),
+            new TableCell({ children: [new Paragraph({ text: 'NA', alignment: AlignmentType.CENTER })] }),
+            new TableCell({ children: [new Paragraph({ text: 'NA', alignment: AlignmentType.LEFT })] }),
+            new TableCell({ children: [new Paragraph({ text: 'NA', alignment: AlignmentType.CENTER })] }),
+            new TableCell({ children: [new Paragraph({ text: 'NA', alignment: AlignmentType.CENTER })] })
+          ]
+        })
+      );
+    } else {
+      list.forEach((st, idx) => {
+        const m = (Array.isArray(st.markEntry) ? st.markEntry[0] : st.markEntry) || {};
+        const comp = (Array.isArray(st.computedResult) ? st.computedResult[0] : (st.computedResult || st)) || {};
+
+        let bestScoreVal = comp.bestScore !== undefined && comp.bestScore !== null ? Number(comp.bestScore) : null;
+        let sessionalTotalVal = comp.sessionalTotal !== undefined && comp.sessionalTotal !== null ? Number(comp.sessionalTotal) : null;
+
+        if (bestScoreVal === null) {
+          const tests = [m.t1, m.t2, m.quizAvg].map(Number).filter((v) => !isNaN(v) && v >= 0);
+          if (m.putMarks && !isNaN(Number(m.putMarks))) tests.push(Math.round(Number(m.putMarks) * 0.2857));
+          if (tests.length > 0) bestScoreVal = Math.max(...tests);
+        }
+
+        if (sessionalTotalVal === null && bestScoreVal !== null) {
+          const ie = m.ieScore ? Number(m.ieScore) : 0;
+          const ta = m.taScore ? Number(m.taScore) : 0;
+          sessionalTotalVal = Math.min(30, Math.min(20, bestScoreVal + ie) + ta);
+        }
+
+        const rollDisplay = String(st.rollNo || st.student?.rollNo || '-');
+        const nameDisplay = String(st.name || st.student?.name || '-');
+        const bestDisplay = bestScoreVal !== null ? String(Math.round(bestScoreVal)) : '-';
+        const totalDisplay = sessionalTotalVal !== null ? String(Math.round(sessionalTotalVal)) : '-';
+
+        rows.push(
+          new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ text: String(idx + 1), alignment: AlignmentType.CENTER })] }),
+              new TableCell({ children: [new Paragraph({ text: rollDisplay, alignment: AlignmentType.CENTER })] }),
+              new TableCell({ children: [new Paragraph({ text: nameDisplay, alignment: AlignmentType.LEFT })] }),
+              new TableCell({ children: [new Paragraph({ text: bestDisplay, alignment: AlignmentType.CENTER })] }),
+              new TableCell({ children: [new Paragraph({ text: totalDisplay, alignment: AlignmentType.CENTER })] })
+            ]
+          })
+        );
+      });
+    }
+
+    return new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: tableBorders,
+      rows
+    });
+  };
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: { top: 720, bottom: 720, left: 1080, right: 1080 }
+          }
+        },
+        children: [
+          // ==================== FAST LEARNERS SECTION ====================
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Subject Name: ${subName}`, bold: true }),
+              new TextRun({ text: `\t\tCourse Code: ${subCode}`, bold: true })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Class: B.Tech (${deptName}) - II Year`, bold: true }),
+              new TextRun({ text: `\tSession: ${acadYear}`, bold: true }),
+              new TextRun({ text: `\tSemester: ${sem}`, bold: true })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Name of the Faculty:  ${faculty}`, bold: true })
+            ],
+            spacing: { after: 200 }
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Sir,' })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Following students mentioned in the list are identified as fast learners with above ${fastCutoff}% in sessional exams.`
+              })
+            ],
+            spacing: { after: 200 }
+          }),
+          createCohortTable(fastStudents),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'List of Activities for Fast Learners:', bold: true })
+            ],
+            spacing: { before: 240, after: 100 }
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('1. https://nptel.ac.in/courses/106/106/106106126/  (NPTEL - Artificial Intelligence)')
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('2. https://www.coursera.org/learn/ai-for-everyone  (Coursera - AI For Everyone, Andrew Ng)')
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('3. https://www.geeksforgeeks.org/artificial-intelligence/  (GeeksforGeeks - AI Complete Tutorial)')
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('4. https://www.kaggle.com/learn/intro-to-machine-learning  (Kaggle - Intro to Machine Learning & AI)')
+            ],
+            spacing: { after: 300 }
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Subject Teacher', bold: true }),
+              new TextRun({ text: '\t\t\t\t\t\t\tDirector', bold: true })
+            ],
+            spacing: { after: 400 }
+          }),
+
+          // Page Break between Fast and Slow
+          new Paragraph({
+            pageBreakBefore: true,
+            children: [
+              new TextRun({ text: `Subject Name: ${subName}`, bold: true }),
+              new TextRun({ text: `\t\tCourse Code: ${subCode}`, bold: true })
+            ]
+          }),
+
+          // ==================== SLOW LEARNERS SECTION ====================
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Class: B.Tech (${deptName}) - II Year`, bold: true }),
+              new TextRun({ text: `\tSession: ${acadYear}`, bold: true }),
+              new TextRun({ text: `\tSemester: ${sem}`, bold: true })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: `Name of the Faculty:  ${faculty}`, bold: true })
+            ],
+            spacing: { after: 200 }
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Sir,' })
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Following students mentioned in the list are identified as slower learners with below ${slowCutoff}% in sessional exams/Quiz.`
+              })
+            ],
+            spacing: { after: 200 }
+          }),
+          createCohortTable(slowStudents),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'List of Activities for Slow Learners:', bold: true })
+            ],
+            spacing: { before: 240, after: 100 }
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('1. https://www.youtube.com/watch?v=JMUxmLyrhSk  (YouTube - Artificial Intelligence Full Course for Beginners)')
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('2. https://www.geeksforgeeks.org/introduction-to-artificial-intelligence/  (GeeksforGeeks - AI Introduction)')
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('3. https://www.khanacademy.org/computing/computer-science  (Khan Academy - Computer Science & AI Basics)')
+            ]
+          }),
+          new Paragraph({
+            children: [
+              new TextRun('4. https://www.hackerearth.com/practice/machine-learning/  (HackerEarth - AI & ML Practice for Beginners)')
+            ],
+            spacing: { after: 300 }
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({ text: 'Subject Teacher', bold: true }),
+              new TextRun({ text: '\t\t\t\t\t\t\tDirector', bold: true })
+            ]
+          })
+        ]
+      }
+    ]
+  });
+
+  return await Packer.toBlob(doc);
+}
+
+/**
+ * Downloads all 4 files bundled inside a single ZIP package.
+ * Exactly matches the 4 sample files provided by the institution.
+ */
+export async function downloadMasterPackage(session, studentsWithResults = []) {
+  const safeCode = (session.subject?.code || 'SESSION').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeSec = (session.section || 'A').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const acadYear = (session.academicYear || '2023-24').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  const file1Name = `Result_Analysis_${safeCode}_${safeSec}.xlsx`;
+  const file2Name = `Internal_Marks_${safeCode}_${safeSec}.xlsx`;
+  const file3Name = `Internal_Enhancement_${safeCode}_${safeSec}.xlsx`;
+  const file4Name = `Slow_Fast_Learner_Mechanism_${safeCode}_${safeSec}.docx`;
+  const zipName = `Master_Sessional_Package_${safeCode}_Sec${safeSec}_${acadYear}.zip`;
+
+  // Generate all 4 documents concurrently
+  const [wb1, wb2, wb3, docxBlob] = await Promise.all([
+    buildResultAnalysisWorkbook(session, studentsWithResults),
+    buildInternalMarksWorkbook(session, studentsWithResults),
+    buildInternalEnhancementWorkbook(session, studentsWithResults),
+    buildSlowFastLearnerDocxBlob(session, studentsWithResults)
+  ]);
+
+  const [buf1, buf2, buf3] = await Promise.all([
+    wb1.xlsx.writeBuffer(),
+    wb2.xlsx.writeBuffer(),
+    wb3.xlsx.writeBuffer()
+  ]);
+
+  // Package into ZIP using JSZip
+  if (typeof window !== 'undefined' && window.JSZip) {
+    const zip = new window.JSZip();
+    const folder = zip.folder(`Master_Sessional_${safeCode}_Sec${safeSec}`);
+
+    // Place files in folder and root of ZIP
+    folder.file(file1Name, buf1);
+    folder.file(file2Name, buf2);
+    folder.file(file3Name, buf3);
+    folder.file(file4Name, docxBlob);
+
+    zip.file(file1Name, buf1);
+    zip.file(file2Name, buf2);
+    zip.file(file3Name, buf3);
+    zip.file(file4Name, docxBlob);
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    triggerBlobDownload(zipBlob, zipName);
+    return;
+  }
+
+  // Graceful sequential download if JSZip is absent
+  triggerBlobDownload(new Blob([buf1], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), file1Name);
+  triggerBlobDownload(new Blob([buf2], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), file2Name);
+  triggerBlobDownload(new Blob([buf3], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), file3Name);
+  triggerBlobDownload(docxBlob, file4Name);
+}
+
+/**
+ * Primary export handler called by all views and buttons when "Download Excel" is clicked.
+ */
+export async function downloadSessionalWorkbook(session, studentsWithResults = []) {
+  return await downloadMasterPackage(session, studentsWithResults);
 }

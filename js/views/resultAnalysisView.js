@@ -75,9 +75,9 @@ export async function renderResultAnalysis(container) {
               <span class="material-symbols-outlined text-[18px] text-slate-500" id="recomputeIcon">sync</span>
               <span>Recompute</span>
             </button>
-            <button onclick="window.api.downloadExcelReport('${session.id}')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-white hover:bg-slate-900 transition-colors shadow-sm text-xs font-bold">
-              <span class="material-symbols-outlined text-[18px]">table_view</span>
-              <span>Download Excel</span>
+            <button onclick="window.api.downloadExcelReport('${session.id}')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-white hover:bg-slate-900 transition-colors shadow-sm text-xs font-bold" title="Downloads folder with Result Analysis, Internal Marks, Internal Enhancement & Slow/Fast Learner Mechanism">
+              <span class="material-symbols-outlined text-[18px]">folder_zip</span>
+              <span>Download Excel (4 Files)</span>
             </button>
           </div>
         </div>
@@ -224,6 +224,7 @@ export async function renderResultAnalysis(container) {
                   <th class="py-2.5 px-2 text-right">T1 (${session.maxT1})</th>
                   <th class="py-2.5 px-2 text-right">T2 (${session.maxT2})</th>
                   <th class="py-2.5 px-2 text-right">Quiz (${session.maxQuiz})</th>
+                  <th class="py-2.5 px-2 text-right">PUT (${session.maxPUT || 70})</th>
                   <th class="py-2.5 px-3 text-right bg-slate-100/70 font-bold">Best (${session.maxT1})</th>
                   <th class="py-2.5 px-3 text-right bg-slate-100/70 font-bold">Best %</th>
                   <th class="py-2.5 px-2 text-right">IE (${session.maxIE})</th>
@@ -245,14 +246,15 @@ export async function renderResultAnalysis(container) {
                     <tr class="hover:bg-slate-50/70 transition-colors analysis-row" data-roll="${roll.toLowerCase()}" data-name="${name.toLowerCase()}" data-tier="${tier}">
                       <td class="py-2.5 px-3 font-mono font-bold text-slate-900 text-sm tracking-tight whitespace-nowrap roll-cell">${roll || '-'}</td>
                       <td class="py-2 px-3 font-medium text-slate-800">${name || '-'}</td>
-                      <td class="py-2 px-2 text-right font-data-tabular">${m.t1 ?? '-'}</td>
-                      <td class="py-2 px-2 text-right font-data-tabular">${m.t2 ?? '-'}</td>
-                      <td class="py-2 px-2 text-right font-data-tabular">${m.quizAvg ?? '-'}</td>
-                      <td class="py-2 px-3 text-right font-data-tabular font-bold text-slate-800 bg-slate-50/60">${c.bestScore ?? '-'}</td>
-                      <td class="py-2 px-3 text-right font-data-tabular font-bold text-primary bg-slate-50/60">${c.bestPct !== undefined ? c.bestPct + '%' : '-'}</td>
-                      <td class="py-2 px-2 text-right font-data-tabular">${m.ieScore ?? '-'}</td>
-                      <td class="py-2 px-2 text-right font-data-tabular">${m.taScore ?? '-'}</td>
-                      <td class="py-2 px-3 text-right font-data-tabular font-bold text-primary">${c.sessionalTotal ?? '-'}</td>
+                      <td class="py-2 px-2 text-right font-data-tabular">${m.t1 === 'A' ? 'A' : (m.t1 !== null && m.t1 !== undefined && m.t1 !== '' ? Math.round(Number(m.t1)) : '-')}</td>
+                      <td class="py-2 px-2 text-right font-data-tabular">${m.t2 === 'A' ? 'A' : (m.t2 !== null && m.t2 !== undefined && m.t2 !== '' ? Math.round(Number(m.t2)) : '-')}</td>
+                      <td class="py-2 px-2 text-right font-data-tabular">${m.quizAvg === 'A' ? 'A' : (m.quizAvg !== null && m.quizAvg !== undefined && m.quizAvg !== '' ? Math.round(Number(m.quizAvg)) : '-')}</td>
+                      <td class="py-2 px-2 text-right font-data-tabular">${m.putMarks ?? '-'}${m.putMarks && !isNaN(m.putMarks) ? ` <span class="text-[11px] text-slate-400 font-normal">(${Math.round(Number(m.putMarks) * 0.2857)})</span>` : ''}</td>
+                      <td class="py-2 px-3 text-right font-data-tabular font-bold text-slate-800 bg-slate-50/60">${c.bestScore !== undefined && c.bestScore !== null ? Math.round(Number(c.bestScore)) : '-'}</td>
+                      <td class="py-2 px-3 text-right font-data-tabular font-bold text-primary bg-slate-50/60">${c.bestPct !== undefined && c.bestPct !== null ? Math.round(Number(c.bestPct)) + '%' : '-'}</td>
+                      <td class="py-2 px-2 text-right font-data-tabular">${m.ieScore !== null && m.ieScore !== undefined && m.ieScore !== '' ? Math.round(Number(m.ieScore)) : '-'}</td>
+                      <td class="py-2 px-2 text-right font-data-tabular">${m.taScore !== null && m.taScore !== undefined && m.taScore !== '' ? Math.round(Number(m.taScore)) : '-'}</td>
+                      <td class="py-2 px-3 text-right font-data-tabular font-bold text-primary">${c.sessionalTotal !== undefined && c.sessionalTotal !== null ? Math.round(Number(c.sessionalTotal)) : '-'}</td>
                       <td class="py-2 px-3 text-center">
                         <span class="inline-block px-2.5 py-0.5 rounded text-[11px] font-bold ${tierClass}">
                           ${tier}

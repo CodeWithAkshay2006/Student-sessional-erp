@@ -73,9 +73,9 @@ export async function renderDashboard(container) {
             </p>
           </div>
           <div class="flex items-center gap-3 shrink-0">
-            <button onclick="window.api.downloadExcelReport('${session.id}')" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors text-sm font-semibold shadow-sm">
-              <span class="material-symbols-outlined text-primary text-[18px]">download</span>
-              <span>Export Overview</span>
+            <button onclick="window.api.downloadExcelReport('${session.id}')" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors text-sm font-semibold shadow-sm" title="Downloads folder with Result Analysis, Internal Marks, Internal Enhancement & Slow/Fast Learner Mechanism">
+              <span class="material-symbols-outlined text-primary text-[18px]">folder_zip</span>
+              <span>Download Master (4 Files)</span>
             </button>
             <button onclick="window.navigateTo('marks-entry')" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-slate-900 transition-colors text-sm font-semibold shadow-sm">
               <span class="material-symbols-outlined text-amber-400 text-[18px]">add_task</span>
@@ -276,6 +276,7 @@ export async function renderDashboard(container) {
                   <th class="py-2.5 px-3 text-right">T1</th>
                   <th class="py-2.5 px-3 text-right">T2</th>
                   <th class="py-2.5 px-3 text-right">Quiz</th>
+                  <th class="py-2.5 px-3 text-right">PUT</th>
                   <th class="py-2.5 px-3 text-right">Best</th>
                   <th class="py-2.5 px-3 text-right">Best %</th>
                   <th class="py-2.5 px-3 text-right font-bold text-primary">Internal (30)</th>
@@ -291,12 +292,13 @@ export async function renderDashboard(container) {
                     <tr class="hover:bg-slate-50/80 transition-colors">
                       <td class="py-2 px-3 font-mono font-bold text-slate-900 text-sm whitespace-nowrap">${s.rollNo}</td>
                       <td class="py-2 px-3 font-medium text-slate-800">${s.name}</td>
-                      <td class="py-2 px-3 text-right font-data-tabular">${m.t1 || '-'}</td>
-                      <td class="py-2 px-3 text-right font-data-tabular">${m.t2 || '-'}</td>
-                      <td class="py-2 px-3 text-right font-data-tabular">${m.quizAvg || '-'}</td>
-                      <td class="py-2 px-3 text-right font-semibold font-data-tabular">${c.bestScore ?? '-'}</td>
-                      <td class="py-2 px-3 text-right font-semibold text-primary font-data-tabular">${c.bestPct !== undefined ? c.bestPct + '%' : '-'}</td>
-                      <td class="py-2 px-3 text-right font-bold text-primary font-data-tabular">${c.sessionalTotal ?? '-'}</td>
+                      <td class="py-2 px-3 text-right font-data-tabular">${m.t1 === 'A' ? 'A' : (m.t1 !== null && m.t1 !== undefined && m.t1 !== '' ? Math.round(Number(m.t1)) : '-')}</td>
+                      <td class="py-2 px-3 text-right font-data-tabular">${m.t2 === 'A' ? 'A' : (m.t2 !== null && m.t2 !== undefined && m.t2 !== '' ? Math.round(Number(m.t2)) : '-')}</td>
+                      <td class="py-2 px-3 text-right font-data-tabular">${m.quizAvg === 'A' ? 'A' : (m.quizAvg !== null && m.quizAvg !== undefined && m.quizAvg !== '' ? Math.round(Number(m.quizAvg)) : '-')}</td>
+                      <td class="py-2 px-3 text-right font-data-tabular">${m.putMarks ?? '-'}${m.putMarks && !isNaN(Number(m.putMarks)) ? ` <span class="text-[10px] text-slate-400">(${Math.round(Number(m.putMarks) * 0.2857)})</span>` : ''}</td>
+                      <td class="py-2 px-3 text-right font-semibold font-data-tabular">${c.bestScore !== undefined && c.bestScore !== null ? Math.round(Number(c.bestScore)) : '-'}</td>
+                      <td class="py-2 px-3 text-right font-semibold text-primary font-data-tabular">${c.bestPct !== undefined && c.bestPct !== null ? Math.round(Number(c.bestPct)) + '%' : '-'}</td>
+                      <td class="py-2 px-3 text-right font-bold text-primary font-data-tabular">${c.sessionalTotal !== undefined && c.sessionalTotal !== null ? Math.round(Number(c.sessionalTotal)) : '-'}</td>
                       <td class="py-2 px-3 text-center">
                         <span class="inline-block px-2.5 py-0.5 rounded text-xs font-semibold ${tierClass}">
                           ${c.classification || 'PENDING'}

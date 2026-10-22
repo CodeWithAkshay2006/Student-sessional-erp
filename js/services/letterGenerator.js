@@ -42,9 +42,11 @@ export async function generateCircularDocx(session, type = 'FAST', students = []
         : 'CIRCULAR: IDENTIFICATION OF SLOW LEARNERS & REMEDIAL INTERVENTION';
 
       const initiativeTag = isFast ? 'Academic Excellence Initiative' : 'Continuous Remedial Action Plan';
+      const fastCutoff = Math.round(Number(session.fastCutoffPct) || 80);
+      const slowCutoff = Math.round(Number(session.slowCutoffPct) || 30);
       const cutoffText = isFast
-        ? `securing a Best Score of ${session.fastCutoffPct || 75}% and above`
-        : `securing a Best Score below ${session.slowCutoffPct || 50}%`;
+        ? `securing a Best Score of ${fastCutoff}% and above`
+        : `securing a Best Score below ${slowCutoff}%`;
 
       const preamble = isFast
         ? `Based on the continuous sessional evaluations (Test 1, Test 2, and Continuous Quizzes) for the course ${session.subject?.name || 'Subject'} (${session.subject?.code || ''}), the following students have demonstrated exceptional academic proficiency by ${cutoffText}. In accordance with departmental enrichment guidelines, these students are hereby recommended for advanced problem-solving modules, competitive coding initiatives, and peer mentorship programs.`
@@ -144,11 +146,29 @@ export async function generateCircularDocx(session, type = 'FAST', students = []
               ]
             });
 
+          const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+          let bestScoreVal = comp.bestScore !== undefined && comp.bestScore !== null ? Number(comp.bestScore) : null;
+          let sessionalTotalVal = comp.sessionalTotal !== undefined && comp.sessionalTotal !== null ? Number(comp.sessionalTotal) : null;
+
+          if (bestScoreVal === null) {
+            const tests = [m.t1, m.t2, m.quizAvg].map(Number).filter((v) => !isNaN(v) && v >= 0);
+            if (m.putMarks && !isNaN(Number(m.putMarks))) tests.push(Math.round(Number(m.putMarks) * 0.2857));
+            if (tests.length > 0) bestScoreVal = Math.max(...tests);
+          }
+
+          if (sessionalTotalVal === null && bestScoreVal !== null) {
+            const ie = m.ieScore ? Number(m.ieScore) : 0;
+            const ta = m.taScore ? Number(m.taScore) : 0;
+            sessionalTotalVal = Math.min(30, Math.min(20, bestScoreVal + ie) + ta);
+          }
+
           const roll = s.rollNo || s.student?.rollNo || '-';
           const name = s.name || s.student?.name || '-';
-          const bestScore = comp.bestScore !== undefined ? comp.bestScore : '-';
-          const bestPct = comp.bestPct !== undefined ? `${comp.bestPct}%` : '-';
-          const sessionalTotal = comp.sessionalTotal !== undefined ? comp.sessionalTotal : '-';
+          const bestScore = bestScoreVal !== null ? Math.round(bestScoreVal) : '-';
+          const bestPct = comp.bestPct !== undefined && comp.bestPct !== null
+            ? `${Math.round(Number(comp.bestPct))}%`
+            : (bestScoreVal !== null ? `${Math.round((bestScoreVal / (Number(session.maxT1) || 20)) * 100)}%` : '-');
+          const sessionalTotal = sessionalTotalVal !== null ? Math.round(sessionalTotalVal) : '-';
 
           studentTableRows.push(
             new TableRow({
@@ -550,14 +570,37 @@ export async function generateCircularDocx(session, type = 'FAST', students = []
         </thead>
         <tbody>
           ${students.length === 0 ? '<tr><td colspan="5" style="text-align:center;color:#64748B;">No students classified in this category.</td></tr>' : students.map((s, idx) => {
-            const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
+            const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+            const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : (s.computedResult || s)) || {};
+
+            let bestScoreVal = comp.bestScore !== undefined && comp.bestScore !== null ? Number(comp.bestScore) : null;
+            let sessionalTotalVal = comp.sessionalTotal !== undefined && comp.sessionalTotal !== null ? Number(comp.sessionalTotal) : null;
+
+            if (bestScoreVal === null) {
+              const tests = [m.t1, m.t2, m.quizAvg].map(Number).filter((v) => !isNaN(v) && v >= 0);
+              if (m.putMarks && !isNaN(Number(m.putMarks))) tests.push(Math.round(Number(m.putMarks) * 0.2857));
+              if (tests.length > 0) bestScoreVal = Math.max(...tests);
+            }
+
+            if (sessionalTotalVal === null && bestScoreVal !== null) {
+              const ie = m.ieScore ? Number(m.ieScore) : 0;
+              const ta = m.taScore ? Number(m.taScore) : 0;
+              sessionalTotalVal = Math.min(30, Math.min(20, bestScoreVal + ie) + ta);
+            }
+
+            const bestDisplay = bestScoreVal !== null ? Math.round(bestScoreVal) : '-';
+            const pctDisplay = comp.bestPct !== undefined && comp.bestPct !== null
+              ? Math.round(Number(comp.bestPct)) + '%'
+              : (bestScoreVal !== null ? Math.round((bestScoreVal / (Number(session.maxT1) || 20)) * 100) + '%' : '-');
+            const totalDisplay = sessionalTotalVal !== null ? Math.round(sessionalTotalVal) : '-';
+
             return `
               <tr class="${idx % 2 === 1 ? 'even' : ''}">
                 <td style="text-align: center;">${idx + 1}</td>
                 <td style="text-align: center; font-weight: bold;">${s.rollNo || s.student?.rollNo || '-'}</td>
                 <td>${s.name || s.student?.name || '-'}</td>
-                <td style="text-align: right;">${comp.bestScore ?? '-'} (${comp.bestPct !== undefined ? comp.bestPct + '%' : '-'})</td>
-                <td style="text-align: right; font-weight: bold;">${comp.sessionalTotal ?? '-'}</td>
+                <td style="text-align: right;">${bestDisplay} (${pctDisplay})</td>
+                <td style="text-align: right; font-weight: bold;">${totalDisplay}</td>
               </tr>
             `;
           }).join('')}

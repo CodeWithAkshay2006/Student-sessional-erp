@@ -60,6 +60,10 @@ export async function renderSettings(container) {
               <input id="setQuiz" type="number" min="0" max="100" value="${session.maxQuiz}" class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-semibold" />
             </div>
             <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">PUT Max</label>
+              <input id="setPUT" type="number" min="0" max="100" value="${session.maxPUT || 70}" class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-semibold" />
+            </div>
+            <div>
               <label class="block text-xs font-bold text-slate-600 uppercase mb-1">IE Max</label>
               <input id="setIE" type="number" min="0" max="50" value="${session.maxIE !== undefined && session.maxIE !== null ? session.maxIE : (session.totalFormula === 'BEST_PLUS_TA' || session.totalFormula === 'AVG_PLUS_TA' ? 0 : 5)}" class="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-semibold" />
             </div>
@@ -97,6 +101,7 @@ export async function renderSettings(container) {
               <option value="BEST_PLUS_TA" ${session.totalFormula === 'BEST_PLUS_TA' || !session.totalFormula ? 'selected' : ''}>Option 2: Best Score (20) + TA (10) = 30 Marks (Default)</option>
               <option value="AVG_PLUS_IE_PLUS_TA" ${session.totalFormula === 'AVG_PLUS_IE_PLUS_TA' ? 'selected' : ''}>Option 3: Avg(T1, T2) (20) + IE (5) + TA (5) = 30 Marks</option>
               <option value="AVG_PLUS_TA" ${session.totalFormula === 'AVG_PLUS_TA' ? 'selected' : ''}>Option 4: Avg(T1, T2) (20) + TA (10) = 30 Marks</option>
+              <option value="BEST_ENHANCED_PLUS_TA" ${session.totalFormula === 'BEST_ENHANCED_PLUS_TA' ? 'selected' : ''}>Option 5: Enhanced Sessional [Best(20) + IE(10)] + TA (10) = 30 Marks</option>
             </select>
           </div>
 
@@ -193,6 +198,7 @@ export async function renderSettings(container) {
           maxT1: Number(document.getElementById('setT1').value),
           maxT2: Number(document.getElementById('setT2').value),
           maxQuiz: Number(document.getElementById('setQuiz').value),
+          maxPUT: Number(document.getElementById('setPUT')?.value || 70),
           maxIE: Number(document.getElementById('setIE').value),
           maxTA: Number(document.getElementById('setTA').value),
           facultyName: document.getElementById('setFaculty').value.trim(),
@@ -226,7 +232,10 @@ export async function renderSettings(container) {
       const f = e.target.value;
       const setIE = document.getElementById('setIE');
       const setTA = document.getElementById('setTA');
-      if (f === 'BEST_PLUS_TA' || f === 'AVG_PLUS_TA') {
+      if (f === 'BEST_ENHANCED_PLUS_TA') {
+        setIE.value = '10';
+        setTA.value = '10';
+      } else if (f === 'BEST_PLUS_TA' || f === 'AVG_PLUS_TA') {
         setIE.value = '0';
         setTA.value = '10';
       } else {

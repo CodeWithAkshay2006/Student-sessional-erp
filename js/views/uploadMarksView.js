@@ -79,7 +79,7 @@ export async function renderUploadMarks(container) {
             <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0 mt-0.5">verified_user</span>
             <div class="text-xs text-slate-600 leading-relaxed">
               <h4 class="font-bold text-slate-800 mb-0.5">Schema Compatibility Rules</h4>
-              Spreadsheet columns can be in any order and accept headers: <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">Roll_Number</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">Student_Name</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">T1_Marks</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">T2_Marks</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">Quiz_Marks</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">IE_Marks</code>, and <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">TA_Marks</code>. Negative values or scores exceeding maximums are automatically flagged.
+              Spreadsheet columns can be in any order and accept headers: <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">Roll_Number</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">Student_Name</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">T1_Marks</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">T2_Marks</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">Quiz_Marks</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">PUT_Marks</code>, <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">IE_Marks</code>, and <code class="px-1 py-0.5 bg-slate-200 rounded text-primary font-mono text-[11px]">TA_Marks</code>. Negative values or scores exceeding maximums are automatically flagged.
             </div>
           </div>
         </div>
@@ -176,6 +176,7 @@ export async function renderUploadMarks(container) {
                 <th class="py-2.5 px-3 text-center">T1 (${session.maxT1 || 20})</th>
                 <th class="py-2.5 px-3 text-center">T2 (${session.maxT2 || 20})</th>
                 <th class="py-2.5 px-3 text-center">Quiz (${session.maxQuiz || 20})</th>
+                <th class="py-2.5 px-3 text-center">PUT (${session.maxPUT || 70})</th>
                 <th class="py-2.5 px-3 text-center">IE (${session.maxIE !== undefined && session.maxIE !== null ? session.maxIE : 5})</th>
                 <th class="py-2.5 px-3 text-center">TA (${session.maxTA !== undefined && session.maxTA !== null ? session.maxTA : 10})</th>
                 <th class="py-2.5 px-3 text-center">Status</th>
@@ -302,6 +303,7 @@ export async function renderUploadMarks(container) {
               <td class="py-2 px-3 text-center ${row.t1 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t1 !== null && row.t1 !== undefined ? row.t1 : '-'}</td>
               <td class="py-2 px-3 text-center ${row.t2 === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.t2 !== null && row.t2 !== undefined ? row.t2 : '-'}</td>
               <td class="py-2 px-3 text-center ${row.quizAvg === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.quizAvg !== null && row.quizAvg !== undefined ? row.quizAvg : '-'}</td>
+              <td class="py-2 px-3 text-center ${row.putMarks === 'A' ? 'text-rose-600 font-bold' : 'text-slate-700 font-mono'}">${row.putMarks !== null && row.putMarks !== undefined ? row.putMarks : '-'}</td>
               <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.ieScore !== null && row.ieScore !== undefined ? row.ieScore : '-'}</td>
               <td class="py-2 px-3 text-center text-slate-700 font-mono">${row.taScore !== null && row.taScore !== undefined ? row.taScore : '-'}</td>
               <td class="py-2 px-3 text-center">

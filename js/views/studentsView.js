@@ -106,7 +106,7 @@ export async function renderStudents(container) {
                   </tr>
                 ` : students.map((s, idx) => {
                   const m = Array.isArray(s.markEntry) ? (s.markEntry[0] || {}) : (s.markEntry || {});
-                  const hasMarks = m && (m.t1 || m.t2 || m.quizAvg);
+                  const hasMarks = m && (m.t1 || m.t2 || m.quizAvg || m.putMarks);
                   const roll = String(s.rollNo || '').trim();
                   const name = String(s.name || '').trim();
                   return `

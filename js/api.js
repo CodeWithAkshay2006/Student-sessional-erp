@@ -234,34 +234,33 @@ export const api = {
     return api.getResults(sessionId);
   },
   saveBatchMarks: async (sessionId, updates) => {
-    for (const update of updates) {
-      if (!update.studentId) continue;
-      const patchData = {};
-      if (update.t1 !== undefined) patchData.t1 = update.t1;
-      if (update.t2 !== undefined) patchData.t2 = update.t2;
-      if (update.quizAvg !== undefined) patchData.quizAvg = update.quizAvg;
-      if (update.ieScore !== undefined) patchData.ieScore = update.ieScore;
-      if (update.taScore !== undefined) patchData.taScore = update.taScore;
+    if (!updates || updates.length === 0) return { data: { success: true } };
 
-      const patchRes = await supabaseRequest(`MarkEntry?studentId=eq.${update.studentId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patchData)
+    const now = new Date().toISOString();
+    const markPayloads = updates
+      .filter((u) => u && u.studentId)
+      .map((u) => ({
+        id: crypto.randomUUID(),
+        studentId: u.studentId,
+        sessionId,
+        t1: u.t1 !== undefined && u.t1 !== null && u.t1 !== '' ? String(u.t1) : null,
+        t2: u.t2 !== undefined && u.t2 !== null && u.t2 !== '' ? String(u.t2) : null,
+        quizAvg: u.quizAvg !== undefined && u.quizAvg !== null && u.quizAvg !== '' ? String(u.quizAvg) : null,
+        putMarks: u.putMarks !== undefined && u.putMarks !== null && u.putMarks !== '' ? String(u.putMarks) : null,
+        ieScore: u.ieScore !== undefined && u.ieScore !== null && u.ieScore !== '' ? String(u.ieScore) : null,
+        taScore: u.taScore !== undefined && u.taScore !== null && u.taScore !== '' ? String(u.taScore) : null,
+        updatedAt: now
+      }));
+
+    if (markPayloads.length > 0) {
+      await supabaseRequest('MarkEntry?on_conflict=studentId', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates,return=representation',
+        body: JSON.stringify(markPayloads)
       });
-
-      if (!patchRes.data || patchRes.data.length === 0) {
-        await supabaseRequest('MarkEntry', {
-          method: 'POST',
-          body: JSON.stringify({
-            id: crypto.randomUUID(),
-            studentId: update.studentId,
-            sessionId,
-            ...patchData
-          })
-        }).catch(() => {});
-      }
     }
 
-    // Recompute results immediately after saving marks
+    // Recompute results immediately in bulk
     await api.recomputeResults(sessionId);
     return { data: { success: true } };
   },
@@ -274,18 +273,19 @@ export const api = {
         const m = Array.isArray(s.markEntry) ? (s.markEntry[0] || null) : (s.markEntry || null);
         let c = Array.isArray(s.computedResult) ? (s.computedResult[0] || null) : (s.computedResult || null);
         if (!c && m) {
-          const best = computeBest(m.t1, m.t2, m.quizAvg);
+          const best = computeBest(m.t1, m.t2, m.quizAvg, m.putMarks);
           const maxComp = 20;
           const pct = computePercentage(best, maxComp);
           const isAbsent = (m.t1 === 'A' || m.t1 === null || m.t1 === undefined) &&
                            (m.t2 === 'A' || m.t2 === null || m.t2 === undefined) &&
-                           (m.quizAvg === 'A' || m.quizAvg === null || m.quizAvg === undefined);
+                           (m.quizAvg === 'A' || m.quizAvg === null || m.quizAvg === undefined) &&
+                           (m.putMarks === 'A' || m.putMarks === null || m.putMarks === undefined);
           const classification = isAbsent ? 'SLOW' : getClassificationLabel(classify(pct, 50, 75));
           c = {
             bestScore: best,
             bestPct: pct,
             classification,
-            sessionalTotal: Number((best + (Number(m.taScore) || 0) + (Number(m.ieScore) || 0)).toFixed(2))
+            sessionalTotal: Math.round(best + (Number(m.taScore) || 0) + (Number(m.ieScore) || 0))
           };
         }
         return {
@@ -321,16 +321,20 @@ export const api = {
 
     const marksRes = await api.getMarks(sessionId);
     const marksList = marksRes.data || [];
+    if (marksList.length === 0) return { data: { success: true } };
 
-    for (const item of marksList) {
+    const now = new Date().toISOString();
+    const maxComponent = Math.max(session.maxT1 || 20, session.maxT2 || 20, session.maxQuiz || 20);
+
+    const computedPayloads = marksList.map((item) => {
       const studentId = item.studentId || item.id;
       const m = (Array.isArray(item.markEntry) ? item.markEntry[0] : item.markEntry) || item;
-      const maxComponent = Math.max(session.maxT1 || 20, session.maxT2 || 20, session.maxQuiz || 20);
-      const bestScore = computeBest(m.t1, m.t2, m.quizAvg);
+      const bestScore = computeBest(m.t1, m.t2, m.quizAvg, m.putMarks);
       const bestPct = computePercentage(bestScore, maxComponent);
       const isAbsent = (m.t1 === 'A' || m.t1 === null || m.t1 === undefined) &&
                        (m.t2 === 'A' || m.t2 === null || m.t2 === undefined) &&
-                       (m.quizAvg === 'A' || m.quizAvg === null || m.quizAvg === undefined);
+                       (m.quizAvg === 'A' || m.quizAvg === null || m.quizAvg === undefined) &&
+                       (m.putMarks === 'A' || m.putMarks === null || m.putMarks === undefined);
       const classification = isAbsent ? 'SLOW' : getClassificationLabel(classify(bestPct, session.slowCutoffPct || 50, session.fastCutoffPct || 75));
 
       const sessionalTotal = computeSessionalTotal(
@@ -339,10 +343,11 @@ export const api = {
           t1: m.t1,
           t2: m.t2,
           quizAvg: m.quizAvg,
+          putMarks: m.putMarks,
           ieScore: m.ieScore,
           taScore: m.taScore
         },
-        session.totalFormula || 'BEST_PLUS_TA',
+        session.totalFormula || 'BEST_ENHANCED_PLUS_TA',
         {
           maxT1: session.maxT1,
           maxT2: session.maxT2,
@@ -352,33 +357,24 @@ export const api = {
         }
       );
 
-      const patchRes = await supabaseRequest(`ComputedResult?studentId=eq.${studentId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          bestScore,
-          bestPct,
-          classification,
-          sessionalTotal,
-          isAbsent
-        })
-      });
+      return {
+        id: crypto.randomUUID(),
+        studentId,
+        sessionId,
+        bestScore,
+        bestPct,
+        classification,
+        sessionalTotal,
+        isAbsent,
+        updatedAt: now
+      };
+    });
 
-      if (!patchRes.data || patchRes.data.length === 0) {
-        await supabaseRequest('ComputedResult', {
-          method: 'POST',
-          body: JSON.stringify({
-            id: crypto.randomUUID(),
-            studentId,
-            sessionId,
-            bestScore,
-            bestPct,
-            classification,
-            sessionalTotal,
-            isAbsent
-          })
-        }).catch(() => {});
-      }
-    }
+    await supabaseRequest('ComputedResult?on_conflict=studentId', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=representation',
+      body: JSON.stringify(computedPayloads)
+    });
 
     return { data: { success: true } };
   },
@@ -409,8 +405,8 @@ export const api = {
             const roll = s.rollNo || s.student?.rollNo || '-';
             const name = s.name || s.student?.name || '-';
             const c = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || s;
-            const bestScore = c.bestScore !== undefined ? c.bestScore : '-';
-            const bestPct = c.bestPct !== undefined ? c.bestPct : '-';
+            const bestScore = c.bestScore !== undefined && c.bestScore !== null ? Math.round(Number(c.bestScore)) : '-';
+            const bestPct = c.bestPct !== undefined && c.bestPct !== null ? Math.round(Number(c.bestPct)) : '-';
             return `${idx + 1}. [${roll}] ${name} — Best Assessment: ${bestScore} (${bestPct}%)`;
           }).join('\n')
         : '• No students currently identified in this cohort classification.') +
@@ -571,6 +567,7 @@ export const api = {
     const t1Idx = findCol(['t1', 'test1', 'ct1', 'st1', 'sessional1', 'exam1', 'internal1']);
     const t2Idx = findCol(['t2', 'test2', 'ct2', 'st2', 'sessional2', 'exam2', 'internal2']);
     const quizIdx = findCol(['quiz', 'assign', 't3', 'test3']);
+    const putIdx = findCol(['put', 'preuniv', 'previousuniversity', 'preuniversity', 'putmarks', 'putexam']);
     const ieIdx = findCol(['ie', 'enhanc', 'rubric', 'lab']);
     const taIdx = findCol(['ta', 'teacher', 'attend', 'conduct']);
 
@@ -591,6 +588,8 @@ export const api = {
       return Number.isFinite(num) ? num : str;
     };
 
+    const maxPUT = session.maxPUT || 70;
+
     for (let i = 1; i < rawMatrix.length; i++) {
       const cols = rawMatrix[i];
       if (!cols || cols.every((c) => String(c || '').trim() === '')) continue;
@@ -610,6 +609,7 @@ export const api = {
       const t1 = t1Idx !== -1 ? sanitizeMark(cols[t1Idx]) : null;
       const t2 = t2Idx !== -1 ? sanitizeMark(cols[t2Idx]) : null;
       const quizAvg = quizIdx !== -1 ? sanitizeMark(cols[quizIdx]) : null;
+      const putMarks = putIdx !== -1 ? sanitizeMark(cols[putIdx]) : null;
       const ieScore = ieIdx !== -1 ? sanitizeMark(cols[ieIdx]) : null;
       const taScore = taIdx !== -1 ? sanitizeMark(cols[taIdx]) : null;
 
@@ -630,6 +630,7 @@ export const api = {
       checkLimit(t1, maxT1, 'T1 Marks');
       checkLimit(t2, maxT2, 'T2 Marks');
       checkLimit(quizAvg, maxQuiz, 'Quiz Marks');
+      checkLimit(putMarks, maxPUT, 'PUT Marks');
       checkLimit(ieScore, maxIE, 'IE Marks');
       checkLimit(taScore, maxTA, 'TA Marks');
 
@@ -640,6 +641,7 @@ export const api = {
         t1,
         t2,
         quizAvg,
+        putMarks,
         ieScore,
         taScore,
         hasError: hasRowError
@@ -697,6 +699,7 @@ export const api = {
             t1: row.t1 !== null && row.t1 !== undefined ? String(row.t1) : null,
             t2: row.t2 !== null && row.t2 !== undefined ? String(row.t2) : null,
             quizAvg: row.quizAvg !== null && row.quizAvg !== undefined ? String(row.quizAvg) : null,
+            putMarks: row.putMarks !== null && row.putMarks !== undefined ? String(row.putMarks) : null,
             ieScore: row.ieScore !== null && row.ieScore !== undefined ? String(row.ieScore) : null,
             taScore: row.taScore !== null && row.taScore !== undefined ? String(row.taScore) : null
           });
@@ -717,9 +720,12 @@ export const api = {
           const studentId = studentMap.get(row.rollNo);
           if (!studentId) continue;
 
-          const bestScore = computeBest(row.t1, row.t2, row.quizAvg);
+          const bestScore = computeBest(row.t1, row.t2, row.quizAvg, row.putMarks);
           const bestPct = computePercentage(bestScore, maxComponent);
-          const isAbsent = (row.t1 === 'A' || row.t1 === null) && (row.t2 === 'A' || row.t2 === null) && (row.quizAvg === 'A' || row.quizAvg === null);
+          const isAbsent = (row.t1 === 'A' || row.t1 === null) &&
+                           (row.t2 === 'A' || row.t2 === null) &&
+                           (row.quizAvg === 'A' || row.quizAvg === null) &&
+                           (row.putMarks === 'A' || row.putMarks === null);
           const classification = isAbsent ? 'SLOW' : getClassificationLabel(classify(bestPct, session.slowCutoffPct || 50, session.fastCutoffPct || 75));
 
           const sessionalTotal = computeSessionalTotal(
@@ -728,6 +734,7 @@ export const api = {
               t1: row.t1,
               t2: row.t2,
               quizAvg: row.quizAvg,
+              putMarks: row.putMarks,
               ieScore: row.ieScore,
               taScore: row.taScore
             },

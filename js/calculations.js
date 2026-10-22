@@ -46,12 +46,18 @@ export function parseMark(val) {
  * @param {number|string|null} t1 - Test 1 score
  * @param {number|string|null} t2 - Test 2 score
  * @param {number|string|null} quizAvg - Continuous Quiz average
+ * @param {number|string|null} [putMarks=null] - Previous University Test (PUT) score
  * @returns {number} The maximum valid score, or 0 if absent in all
  */
-export function computeBest(t1, t2, quizAvg) {
+export function computeBest(t1, t2, quizAvg, putMarks = null) {
   const scores = [t1, t2, quizAvg]
     .map(parseMark)
     .filter((score) => score !== null);
+
+  const rawPut = parseMark(putMarks);
+  if (rawPut !== null) {
+    scores.push(Math.round(rawPut * 0.2857));
+  }
 
   if (scores.length === 0) {
     return 0;
@@ -233,8 +239,10 @@ export function computeSessionalTotal(marks, formula = 'BEST_PLUS_IE_PLUS_TA', c
   if (!marks) return 0;
 
   const maxT1 = config.maxT1 || 20;
-  const maxIE = config.maxIE || 5;
-  const maxTA = config.maxTA || (formula === 'BEST_PLUS_TA' || formula === 'opt2' || formula === 'AVG_PLUS_TA' || formula === 'opt4' ? 10 : 5);
+  const isEnhancedOpt5 = formula === 'BEST_ENHANCED_PLUS_TA' || formula === 'opt5';
+  const isTA10 = formula === 'BEST_PLUS_TA' || formula === 'opt2' || formula === 'AVG_PLUS_TA' || formula === 'opt4' || isEnhancedOpt5;
+  const maxIE = config.maxIE || (isEnhancedOpt5 ? 10 : 5);
+  const maxTA = config.maxTA || (isTA10 ? 10 : 5);
 
   const rawBest = parseMark(marks.bestScore) ?? 0;
   const rawIE = parseMark(marks.ieScore) ?? 0;
@@ -246,6 +254,17 @@ export function computeSessionalTotal(marks, formula = 'BEST_PLUS_IE_PLUS_TA', c
   let total = 0;
 
   switch (formula) {
+    case 'BEST_ENHANCED_PLUS_TA':
+    case 'opt5': {
+      // Option 5: Teacher Assessment is 10 marks, Internal Enhancement is considered as written (up to 10 marks),
+      // enhancing written sessional up to 20: min(20, Best(20) + IE(10)), plus TA(10), yielding sum out of 30 (not 40).
+      const scaledIE = maxIE === 10 ? rawIE : (rawIE / maxIE) * 10;
+      const scaledTA = maxTA === 10 ? rawTA : (rawTA / maxTA) * 10;
+      const enhancedWritten = Math.min(20, scaledBest + scaledIE);
+      total = enhancedWritten + scaledTA;
+      break;
+    }
+
     case 'BEST_PLUS_TA':
     case 'opt2': {
       // Standard Scale: Best(20) + TA(10) = 30 Marks
@@ -288,7 +307,7 @@ export function computeSessionalTotal(marks, formula = 'BEST_PLUS_IE_PLUS_TA', c
     }
   }
 
-  // Clamped to 30 marks standard ceiling
+  // Clamped to 30 marks standard ceiling and rounded off
   const bounded = Math.max(0, Math.min(30, total));
-  return Number(bounded.toFixed(2));
+  return Math.round(bounded);
 }

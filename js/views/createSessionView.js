@@ -243,6 +243,13 @@ export async function renderCreateSession(container, prefillData = {}) {
                   <span class="text-[10px] text-slate-400">Continuous</span>
                 </div>
 
+                <!-- PUT -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col gap-1">
+                  <label class="text-[11px] font-bold text-slate-500 uppercase">PUT Exam</label>
+                  <input id="maxPUTInput" type="number" min="0" max="100" value="70" class="w-full h-8 px-2 bg-white border border-slate-200 rounded font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <span class="text-[10px] text-slate-400">Pre-Univ (x0.2857)</span>
+                </div>
+
                 <!-- IE -->
                 <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col gap-1">
                   <label class="text-[11px] font-bold text-slate-500 uppercase">Int. Enh. (IE)</label>
@@ -285,9 +292,10 @@ export async function renderCreateSession(container, prefillData = {}) {
                 <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Select Total Formula Rule (30 Marks Standard Scale)</label>
                 <select id="formulaSelect" class="w-full h-10 px-3 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary focus:outline-none">
                   <option value="BEST_PLUS_IE_PLUS_TA">Option 1: Best Score (20) + Internal Enhancement (5) + TA (5) = 30 Marks</option>
-                  <option value="BEST_PLUS_TA" selected>Option 2: Best Score (20) + Teacher Assessment (10) = 30 Marks (Recommended)</option>
+                  <option value="BEST_PLUS_TA">Option 2: Best Score (20) + Teacher Assessment (10) = 30 Marks</option>
                   <option value="AVG_PLUS_IE_PLUS_TA">Option 3: Average(T1, T2) (20) + Internal Enhancement (5) + TA (5) = 30 Marks</option>
                   <option value="AVG_PLUS_TA">Option 4: Average(T1, T2) (20) + Teacher Assessment (10) = 30 Marks</option>
+                  <option value="BEST_ENHANCED_PLUS_TA" selected>Option 5: Enhanced Sessional [Best(20) + IE(10)] + TA(10) = 30 Marks (Recommended)</option>
                 </select>
               </div>
 
@@ -363,6 +371,7 @@ export async function renderCreateSession(container, prefillData = {}) {
     const maxT1 = document.getElementById('maxT1Input');
     const maxT2 = document.getElementById('maxT2Input');
     const maxQuiz = document.getElementById('maxQuizInput');
+    const maxPUT = document.getElementById('maxPUTInput');
     const maxIE = document.getElementById('maxIEInput');
     const maxTA = document.getElementById('maxTAInput');
     const maxIESubtext = document.getElementById('maxIESubtext');
@@ -377,7 +386,16 @@ export async function renderCreateSession(container, prefillData = {}) {
 
       // Auto-tune all assessment compound parameters according to the selected option rule
       if (source === 'formula') {
-        if (f === 'BEST_PLUS_TA') {
+        if (f === 'BEST_ENHANCED_PLUS_TA') {
+          // Option 5: Best(20) enhanced with IE(10) + TA(10) = 30 Marks
+          maxT1.value = '20';
+          maxT2.value = '20';
+          maxQuiz.value = '20';
+          maxIE.value = '10';
+          maxTA.value = '10';
+          if (maxIESubtext) maxIESubtext.textContent = 'Enhance Written (10 pts)';
+          if (maxTASubtext) maxTASubtext.textContent = 'Teacher Assmt (10 pts)';
+        } else if (f === 'BEST_PLUS_TA') {
           // Option 2: Best(20) + TA(10) = 30 (IE is 0)
           maxT1.value = '20';
           maxT2.value = '20';
@@ -419,14 +437,17 @@ export async function renderCreateSession(container, prefillData = {}) {
       const t1 = Number(maxT1.value) || 20;
       const t2 = Number(maxT2.value) || 20;
       const q = Number(maxQuiz.value) || 20;
+      const put = Number(maxPUT?.value) || 70;
       const ie = Number(maxIE.value) || 0;
       const ta = Number(maxTA.value) || 0;
 
-      grossDisplay.textContent = (t1 + t2 + q + ie + ta).toString();
+      grossDisplay.textContent = (t1 + t2 + q + put + ie + ta).toString();
 
       let eq = '';
 
-      if (f === 'BEST_PLUS_TA') {
+      if (f === 'BEST_ENHANCED_PLUS_TA') {
+        eq = `min(20, Best(${t1}) + IE(${ie})) + TA(${ta}) = 30 Marks`;
+      } else if (f === 'BEST_PLUS_TA') {
         eq = `${t1} (Best) + ${ta} (TA) = 30 Marks`;
       } else if (f === 'AVG_PLUS_TA') {
         eq = `${t1} (Avg T1/T2) + ${ta} (TA) = 30 Marks`;
@@ -440,7 +461,7 @@ export async function renderCreateSession(container, prefillData = {}) {
       ceilingDisplay.textContent = `30 Marks`;
     };
 
-    [maxT1, maxT2, maxQuiz, maxIE, maxTA].forEach((el) => {
+    [maxT1, maxT2, maxQuiz, maxPUT, maxIE, maxTA].filter(Boolean).forEach((el) => {
       el.addEventListener('input', () => updateFormulaPreview('input'));
     });
     formulaSelect.addEventListener('change', () => updateFormulaPreview('formula'));
@@ -470,6 +491,7 @@ export async function renderCreateSession(container, prefillData = {}) {
           maxT1: Number(maxT1.value),
           maxT2: Number(maxT2.value),
           maxQuiz: Number(maxQuiz.value),
+          maxPUT: Number(maxPUT?.value || 70),
           maxIE: Number(maxIE.value),
           maxTA: Number(maxTA.value),
           slowCutoffPct: Number(slowInput.value),

@@ -74,11 +74,11 @@ export async function renderReports(container) {
               </div>
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-500">Fast Cutoff</span>
-                <span class="font-bold text-emerald-700 font-data-tabular">&ge; ${session.fastCutoffPct || 75}%</span>
+                <span class="font-bold text-emerald-700 font-data-tabular">&ge; ${Math.round(session.fastCutoffPct || 80)}%</span>
               </div>
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-500">Slow Cutoff</span>
-                <span class="font-bold text-rose-700 font-data-tabular">&lt; ${session.slowCutoffPct || 50}%</span>
+                <span class="font-bold text-rose-700 font-data-tabular">&lt; ${Math.round(session.slowCutoffPct || 30)}%</span>
               </div>
               <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-200">
                 <span class="text-slate-500">Affiliation</span>
@@ -96,15 +96,15 @@ export async function renderReports(container) {
               <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
                 <span class="material-symbols-outlined text-[28px]">table_view</span>
               </div>
-              <span class="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Spreadsheet Format</span>
-              <h3 class="text-lg font-bold text-slate-900 mt-1">Master Sessional Workbook</h3>
+              <span class="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">Institutional Package</span>
+              <h3 class="text-lg font-bold text-slate-900 mt-1">Master Sessional Package</h3>
               <p class="text-xs text-slate-500 mt-2 leading-relaxed">
-                3-sheet Excel workbook containing <strong>Result Analysis</strong>, <strong>Internal Enhancement</strong>, and <strong>Statistical Summary</strong> with native live formulas (MAX, AVERAGE, STDEV.S, COUNTIF).
+                Downloads all 4 evaluation documents bundled in a folder / ZIP archive: <strong>Result Analysis (.xlsx)</strong>, <strong>Internal Marks (.xlsx)</strong>, <strong>Internal Enhancement (.xlsx)</strong>, and <strong>Slow & Fast Learner Mechanism (.docx)</strong>.
               </p>
             </div>
             <button onclick="window.api.downloadExcelReport('${session.id}')" class="mt-6 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-700 text-white font-bold text-xs hover:bg-emerald-800 transition-colors shadow-sm">
-              <span class="material-symbols-outlined text-[18px]">download</span>
-              <span>Download Excel (.xlsx)</span>
+              <span class="material-symbols-outlined text-[18px]">folder_zip</span>
+              <span>Download Master Package (4 Files in Folder)</span>
             </button>
           </div>
 
@@ -117,7 +117,7 @@ export async function renderReports(container) {
               <span class="text-[10px] uppercase font-bold text-blue-700 tracking-wider">Official Document</span>
               <h3 class="text-lg font-bold text-slate-900 mt-1">Fast Learner Circular</h3>
               <p class="text-xs text-slate-500 mt-2 leading-relaxed">
-                Formal circular listing all <strong>Fast Learners</strong> (&ge;${session.fastCutoffPct || 75}%) in roll-number order, paired with configured advanced enrichment resource links ready for signature.
+                Formal circular listing all <strong>Fast Learners</strong> (&ge;${Math.round(session.fastCutoffPct || 80)}%) in roll-number order, paired with configured advanced enrichment resource links ready for signature.
               </p>
             </div>
             <div class="mt-6 flex items-center gap-2">
@@ -141,7 +141,7 @@ export async function renderReports(container) {
               <span class="text-[10px] uppercase font-bold text-rose-700 tracking-wider">Official Document</span>
               <h3 class="text-lg font-bold text-slate-900 mt-1">Slow Learner Remedial</h3>
               <p class="text-xs text-slate-500 mt-2 leading-relaxed">
-                Official circular identifying all <strong>Slow Learners</strong> (&lt;${session.slowCutoffPct || 50}%) in roll-number order with scheduled remedial clinics and foundational links.
+                Official circular identifying all <strong>Slow Learners</strong> (&lt;${Math.round(session.slowCutoffPct || 30)}%) in roll-number order with scheduled remedial clinics and foundational links.
               </p>
             </div>
             <div class="mt-6 flex items-center gap-2">

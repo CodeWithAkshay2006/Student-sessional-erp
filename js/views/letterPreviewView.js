@@ -47,9 +47,11 @@ export async function renderLetterPreview(container, initialTrack = 'FAST') {
         ? 'CIRCULAR: IDENTIFICATION OF FAST LEARNERS & ADVANCED ENRICHMENT'
         : 'CIRCULAR: IDENTIFICATION OF SLOW LEARNERS & REMEDIAL INTERVENTION';
 
+      const fastCutoff = Math.round(Number(session.fastCutoffPct) || 80);
+      const slowCutoff = Math.round(Number(session.slowCutoffPct) || 30);
       const cutoffText = isFast
-        ? `Best Score of ${session.fastCutoffPct || 75}% and above`
-        : `Best Score below ${session.slowCutoffPct || 50}%`;
+        ? `Best Score of ${fastCutoff}% and above`
+        : `Best Score below ${slowCutoff}%`;
 
       const preamble = isFast
         ? `Based on the comprehensive continuous sessional evaluations (Test 1, Test 2, and Continuous Quizzes), the following students have demonstrated exceptional academic proficiency by securing a ${cutoffText}. In accordance with departmental academic enhancement policies, these students are recommended for advanced problem-solving modules, peer mentoring, and competitive programming initiatives.`
@@ -182,15 +184,38 @@ export async function renderLetterPreview(container, initialTrack = 'FAST') {
                       ` : students.map((s, idx) => {
                         const roll = s.rollNo || s.student?.rollNo || '-';
                         const name = s.name || s.student?.name || '-';
-                        const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : s.computedResult) || {};
+                        const m = (Array.isArray(s.markEntry) ? s.markEntry[0] : s.markEntry) || {};
+                        const comp = (Array.isArray(s.computedResult) ? s.computedResult[0] : (s.computedResult || s)) || {};
+
+                        let bestScoreVal = comp.bestScore !== undefined && comp.bestScore !== null ? Number(comp.bestScore) : null;
+                        let sessionalTotalVal = comp.sessionalTotal !== undefined && comp.sessionalTotal !== null ? Number(comp.sessionalTotal) : null;
+
+                        if (bestScoreVal === null) {
+                          const tests = [m.t1, m.t2, m.quizAvg].map(Number).filter((v) => !isNaN(v) && v >= 0);
+                          if (m.putMarks && !isNaN(Number(m.putMarks))) tests.push(Math.round(Number(m.putMarks) * 0.2857));
+                          if (tests.length > 0) bestScoreVal = Math.max(...tests);
+                        }
+
+                        if (sessionalTotalVal === null && bestScoreVal !== null) {
+                          const ie = m.ieScore ? Number(m.ieScore) : 0;
+                          const ta = m.taScore ? Number(m.taScore) : 0;
+                          sessionalTotalVal = Math.min(30, Math.min(20, bestScoreVal + ie) + ta);
+                        }
+
+                        const bestDisplay = bestScoreVal !== null ? Math.round(bestScoreVal) : 0;
+                        const pctDisplay = comp.bestPct !== undefined && comp.bestPct !== null
+                          ? Math.round(Number(comp.bestPct))
+                          : (bestScoreVal !== null ? Math.round((bestScoreVal / (Number(session.maxT1) || 20)) * 100) : 0);
+                        const totalDisplay = sessionalTotalVal !== null ? Math.round(sessionalTotalVal) : 0;
+
                         const isEven = idx % 2 === 1;
                         return `
                           <tr class="${isEven ? 'bg-slate-50/50' : 'bg-white'} hover:bg-amber-50/40 transition-colors">
                             <td class="py-2 px-2.5 text-center text-slate-400 font-mono text-[11px]">${idx + 1}</td>
                             <td class="py-2 px-3 font-mono font-bold text-slate-900 text-[13px] sm:text-sm tracking-normal whitespace-nowrap roll-cell">${roll}</td>
                             <td class="py-2 px-3 font-medium text-slate-900 font-sans text-xs">${name}</td>
-                            <td class="py-2 px-3 text-right text-slate-700 text-xs">${comp.bestScore ?? 0} <span class="text-slate-400 text-[10.5px]">(${comp.bestPct ?? 0}%)</span></td>
-                            <td class="py-2 px-3 text-right font-bold text-primary text-xs">${comp.sessionalTotal ?? 0}</td>
+                            <td class="py-2 px-3 text-right text-slate-700 text-xs">${bestDisplay} <span class="text-slate-400 text-[10.5px]">(${pctDisplay}%)</span></td>
+                            <td class="py-2 px-3 text-right font-bold text-primary text-xs">${totalDisplay}</td>
                             <td class="py-2 px-3 font-sans">
                               <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-semibold tracking-tight ${isFast ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}">
                                 ${isFast ? 'Advanced Problem Solving' : 'Remedial Support Clinic'}
